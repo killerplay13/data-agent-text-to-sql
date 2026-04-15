@@ -1,0 +1,37 @@
+[
+  {
+    "type": "sql_template",
+    "name": "highest_deposit_customer",
+    "question_example": "Who is the customer with the highest deposit?",
+    "sql": "SELECT c.customer_name, d.deposit_amount FROM customers c JOIN deposits d ON c.customer_id = d.customer_id ORDER BY d.deposit_amount DESC LIMIT 1;",
+    "business_description": "Find the customer with the single highest deposit amount in the bank."
+  },
+  {
+    "type": "sql_template",
+    "name": "top_customers_by_branch",
+    "question_example": "Who are the top 10 customers in Taipei Branch by deposit amount?",
+    "sql": "SELECT c.customer_name, d.deposit_amount FROM customers c JOIN deposits d ON c.customer_id = d.customer_id JOIN branches b ON c.branch_id = b.branch_id WHERE b.branch_name = 'Taipei Branch' ORDER BY d.deposit_amount DESC LIMIT 10;",
+    "business_description": "Find the top customers in a specific branch ranked by deposit amount."
+  },
+  {
+    "type": "sql_template",
+    "name": "average_deposit_per_rm",
+    "question_example": "What is the average deposit amount managed by each relationship manager?",
+    "sql": "SELECT rm.rm_name, AVG(d.deposit_amount) AS avg_deposit FROM relationship_managers rm JOIN customers c ON rm.rm_id = c.rm_id JOIN deposits d ON c.customer_id = d.customer_id GROUP BY rm.rm_name ORDER BY avg_deposit DESC;",
+    "business_description": "Calculate the average customer deposit amount for each relationship manager."
+  },
+  {
+    "type": "sql_template",
+    "name": "total_deposit_by_branch",
+    "question_example": "What is the total deposit amount in each branch?",
+    "sql": "SELECT b.branch_name, SUM(d.deposit_amount) AS total_deposit FROM branches b JOIN customers c ON b.branch_id = c.branch_id JOIN deposits d ON c.customer_id = d.customer_id GROUP BY b.branch_name ORDER BY total_deposit DESC;",
+    "business_description": "Calculate the total amount of deposits held by customers in each branch."
+  },
+  {
+    "type": "sql_template",
+    "name": "customers_under_rm",
+    "question_example": "Which customers are managed by Alice Chen?",
+    "sql": "SELECT c.customer_name FROM customers c JOIN relationship_managers rm ON c.rm_id = rm.rm_id WHERE rm.rm_name = 'Alice Chen' ORDER BY c.customer_name ASC;",
+    "business_description": "Find the list of customers assigned to a specific relationship manager."
+  }
+]

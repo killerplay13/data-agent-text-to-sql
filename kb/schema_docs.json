@@ -1,0 +1,105 @@
+[
+  {
+    "type": "schema",
+    "table_name": "branches",
+    "description": "Stores branch information for the bank.",
+    "columns": [
+      {
+        "name": "branch_id",
+        "data_type": "INTEGER",
+        "description": "Unique identifier for a bank branch."
+      },
+      {
+        "name": "branch_name",
+        "data_type": "TEXT",
+        "description": "The name of the bank branch."
+      },
+      {
+        "name": "city",
+        "data_type": "TEXT",
+        "description": "The city where the branch is located."
+      }
+    ]
+  },
+  {
+    "type": "schema",
+    "table_name": "relationship_managers",
+    "description": "Stores relationship manager information. A relationship manager manages customer accounts.",
+    "columns": [
+      {
+        "name": "rm_id",
+        "data_type": "INTEGER",
+        "description": "Unique identifier for a relationship manager."
+      },
+      {
+        "name": "rm_name",
+        "data_type": "TEXT",
+        "description": "The full name of the relationship manager."
+      },
+      {
+        "name": "branch_id",
+        "data_type": "INTEGER",
+        "description": "The branch where the relationship manager works."
+      }
+    ]
+  },
+  {
+    "type": "schema",
+    "table_name": "customers",
+    "description": "Stores bank customer basic information.",
+    "columns": [
+      {
+        "name": "customer_id",
+        "data_type": "INTEGER",
+        "description": "Unique identifier for a customer."
+      },
+      {
+        "name": "customer_name",
+        "data_type": "TEXT",
+        "description": "The full name of the customer."
+      },
+      {
+        "name": "branch_id",
+        "data_type": "INTEGER",
+        "description": "The branch assigned to the customer."
+      },
+      {
+        "name": "rm_id",
+        "data_type": "INTEGER",
+        "description": "The relationship manager assigned to the customer."
+      }
+    ]
+  },
+  {
+    "type": "schema",
+    "table_name": "deposits",
+    "description": "Stores deposit account information for customers.",
+    "columns": [
+      {
+        "name": "deposit_id",
+        "data_type": "INTEGER",
+        "description": "Unique identifier for a deposit record."
+      },
+      {
+        "name": "customer_id",
+        "data_type": "INTEGER",
+        "description": "The customer who owns this deposit."
+      },
+      {
+        "name": "deposit_amount",
+        "data_type": "REAL",
+        "description": "The amount of money deposited by the customer."
+      },
+      {
+        "name": "deposit_type",
+        "data_type": "TEXT",
+        "description": "The type of deposit account, such as savings, checking, or time_deposit."
+      },
+      {
+        "name": "updated_at",
+        "data_type": "TEXT",
+        "description": "The timestamp when the deposit record was last updated."
+      }
+    ]
+  }
+]

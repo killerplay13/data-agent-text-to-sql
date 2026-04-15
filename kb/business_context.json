@@ -1,0 +1,27 @@
+[
+  {
+    "type": "business_context",
+    "topic": "relationship_manager",
+    "description": "A relationship manager (RM) is responsible for managing and servicing a portfolio of bank customers. Queries about RM often involve aggregating customer deposit data by rm_id or rm_name."
+  },
+  {
+    "type": "business_context",
+    "topic": "branch",
+    "description": "A branch is a physical banking location. Customers and relationship managers are associated with branches. Queries about branches may involve filtering or aggregating customers and deposits by branch."
+  },
+  {
+    "type": "business_context",
+    "topic": "deposit_amount",
+    "description": "Deposit amount represents the total amount of money held in a customer deposit account. It is the main metric used for ranking customers and calculating totals or averages."
+  },
+  {
+    "type": "business_context",
+    "topic": "customer_ranking",
+    "description": "Customer ranking is usually based on deposit_amount in descending order. Higher deposit amounts indicate more valuable customers from a banking relationship perspective."
+  },
+  {
+    "type": "business_context",
+    "topic": "banking_queries",
+    "description": "Common banking analytical questions include top customers by deposit, average deposit per relationship manager, total deposit per branch, and customer lists under a specific manager."
+  }
+]

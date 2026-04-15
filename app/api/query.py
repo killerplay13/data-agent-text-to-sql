@@ -18,10 +18,12 @@ def query_data(request: QueryRequest):
         execution_service = ExecutionService()
         answer_service = AnswerService()
 
-        retrieval_result = retrieval_service.retrieve(request.query)
-        generated_sql = sql_service.generate_sql(request.query, retrieval_result)
+        user_query = request.user_query
+
+        retrieval_result = retrieval_service.retrieve(user_query)
+        generated_sql = sql_service.generate_sql(user_query, retrieval_result)
         query_result = execution_service.execute_query(generated_sql)
-        answer = answer_service.generate_answer(request.query, query_result)
+        answer = answer_service.generate_answer(user_query, query_result)
 
         return QueryResponse(
             answer=answer,

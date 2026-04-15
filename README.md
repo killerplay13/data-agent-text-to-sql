@@ -9,7 +9,7 @@ This system converts natural language queries into SQL, executes them on a datab
 ## 🚀 Features
 
 - Natural language → SQL pipeline
-- Knowledge-base-driven retrieval (schema + SQL templates + business context)
+- Knowledge-base-driven retrieval (current: rule-based, planned: OpenSearch vector DB)
 - SQL generation (LLM + fallback mechanism)
 - Safe SQL execution (SELECT-only)
 - Natural language answer generation
@@ -44,6 +44,19 @@ tests/           # evaluation dataset
 
 ---
 
+## 🏗️ Architecture Design
+
+The system follows a modular pipeline architecture:
+
+- Retrieval Layer: selects relevant schema, SQL templates, and business context
+- SQL Generation Layer: generates SQL using LLM or fallback strategy
+- Execution Layer: safely executes SQL against SQLite
+- Answer Layer: converts structured results into natural language
+
+Each module is designed as an independent service to ensure extensibility and maintainability.
+
+---
+
 ## 🧠 How It Works
 
 1. User sends a natural language query
@@ -66,9 +79,11 @@ Request:
 
 ```json
 {
-  "query": "Who has the highest deposit?"
+  "user_query": "Who has the highest deposit?"
 }
 ```
+
+Legacy clients may still send `query`, but `user_query` is the canonical request field.
 
 Response:
 
@@ -179,8 +194,9 @@ python -m scripts.run_eval
 
 ## What it evaluates
 
-- Exact SQL match
-- Query result match
+- Exact SQL match (string-level comparison)
+- Query result match (logical correctness)
+- Pipeline correctness (retrieval → SQL → execution → answer)
 
 ---
 

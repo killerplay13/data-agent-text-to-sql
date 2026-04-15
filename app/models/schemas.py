@@ -1,9 +1,12 @@
-from pydantic import BaseModel
+from pydantic import AliasChoices, BaseModel, Field
 from typing import Any
 
 
 class QueryRequest(BaseModel):
-    query: str
+    user_query: str = Field(
+        validation_alias=AliasChoices("user_query", "query"),
+        description="Natural language query from the user.",
+    )
 
 
 class QueryResponse(BaseModel):

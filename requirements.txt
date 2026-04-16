@@ -6,3 +6,4 @@ sqlalchemy
 pydantic
 python-dotenv
 requests
+opensearch-py

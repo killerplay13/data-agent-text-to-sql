@@ -182,6 +182,34 @@ python -m uvicorn app.main:app --reload
 
 ---
 
+# 🔎 OpenSearch Local Setup
+
+Start OpenSearch:
+
+```bash
+docker compose up -d
+```
+
+Build the local OpenSearch indexes from the JSON knowledge base:
+
+```bash
+python -m scripts.build_vector_index
+```
+
+Switch retrieval backends with `RETRIEVAL_BACKEND` in `.env`:
+
+```env
+RETRIEVAL_BACKEND=local
+```
+
+or:
+
+```env
+RETRIEVAL_BACKEND=opensearch
+```
+
+---
+
 # 🧪 Evaluation
 
 Run:

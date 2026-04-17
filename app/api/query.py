@@ -1,10 +1,10 @@
 from fastapi import APIRouter, HTTPException
 
 from app.models.schemas import QueryRequest, QueryResponse
-from app.services.retrieval_service import RetrievalService
-from app.services.sql_generation_service import SQLGenerationService
-from app.services.execution_service import ExecutionService
-from app.services.answer_service import AnswerService
+from app.skills.answer_skill import AnswerSkill
+from app.skills.execution_skill import ExecutionSkill
+from app.skills.retrieval_skill import RetrievalSkill
+from app.skills.sql_skill import SQLSkill
 
 
 router = APIRouter()
@@ -13,22 +13,21 @@ router = APIRouter()
 @router.post("/query", response_model=QueryResponse)
 def query_data(request: QueryRequest):
     try:
-        retrieval_service = RetrievalService()
-        sql_service = SQLGenerationService()
-        execution_service = ExecutionService()
-        answer_service = AnswerService()
+        skills = [
+            RetrievalSkill(),
+            SQLSkill(),
+            ExecutionSkill(),
+            AnswerSkill(),
+        ]
 
-        user_query = request.user_query
-
-        retrieval_result = retrieval_service.retrieve(user_query)
-        generated_sql = sql_service.generate_sql(user_query, retrieval_result)
-        query_result = execution_service.execute_query(generated_sql)
-        answer = answer_service.generate_answer(user_query, query_result)
+        context = {"user_query": request.user_query}
+        for skill in skills:
+            context = skill.execute(context)
 
         return QueryResponse(
-            answer=answer,
-            generated_sql=generated_sql,
-            query_result=query_result
+            answer=context["answer"],
+            generated_sql=context["generated_sql"],
+            query_result=context["query_result"]
         )
 
     except Exception as e:

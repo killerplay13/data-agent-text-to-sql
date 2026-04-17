@@ -37,15 +37,50 @@ Now provide the final answer in natural language only.
 
     def fallback_answer(self, user_query: str, query_result: list[dict]) -> str:
         if not query_result:
-            return "No matching data was found."
+            return "No matching data was found for the query."
 
-        first_row = query_result[0]
+        if len(query_result) == 1:
+            return f"Found 1 row. {self._format_row(query_result[0])}."
 
-        if "customer_name" in first_row and "deposit_amount" in first_row:
-            amount = f"{first_row['deposit_amount']:,.0f}"
-            return f"The customer with the highest deposit is {first_row['customer_name']}, with a deposit amount of {amount}."
+        preview_limit = 3
+        preview_rows = query_result[:preview_limit]
+        preview = "\n".join(
+            f"{index}. {self._format_row(row)}"
+            for index, row in enumerate(preview_rows, start=1)
+        )
+        remaining_count = len(query_result) - len(preview_rows)
+        remaining_text = (
+            f"\n...and {remaining_count} more row(s)."
+            if remaining_count
+            else ""
+        )
 
-        return f"Query completed successfully. Result: {query_result}"
+        return (
+            f"Found {len(query_result)} rows. "
+            f"Preview of the first {len(preview_rows)} row(s):\n"
+            f"{preview}"
+            f"{remaining_text}"
+        )
+
+    def _format_row(self, row: dict) -> str:
+        if not row:
+            return "empty row"
+
+        return ", ".join(
+            f"{key}: {self._format_value(value)}"
+            for key, value in row.items()
+        )
+
+    def _format_value(self, value) -> str:
+        if value is None:
+            return "null"
+        if isinstance(value, bool):
+            return str(value)
+        if isinstance(value, int):
+            return f"{value:,}"
+        if isinstance(value, float):
+            return f"{value:,.2f}".rstrip("0").rstrip(".")
+        return str(value)
 
     def generate_answer(self, user_query: str, query_result: list[dict]) -> str:
         if not self.llm:

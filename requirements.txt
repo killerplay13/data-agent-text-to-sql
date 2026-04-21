@@ -7,3 +7,4 @@ pydantic
 python-dotenv
 requests
 opensearch-py
+sentence-transformers

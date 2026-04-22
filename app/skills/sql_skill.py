@@ -33,6 +33,41 @@ class SQLSkill(BaseSkill):
             input["retrieval_result"],
         )
 
+        query_plan = self.service.last_query_plan
+        compliance_error = self.service.plan_compliance_error(
+            input["user_query"],
+            input["generated_sql"],
+            query_plan,
+        )
+        if compliance_error:
+            print("Generated SQL failed plan compliance; attempting repair before fallback.")
+            repaired_sql = self.service.repair_sql(
+                input["user_query"],
+                input["retrieval_result"],
+                input["generated_sql"],
+                compliance_error,
+                query_plan,
+            )
+            if (
+                repaired_sql
+                and not self.service.plan_compliance_error(
+                    input["user_query"],
+                    repaired_sql,
+                    query_plan,
+                )
+                and not self._validation_error(repaired_sql, input["retrieval_result"])
+            ):
+                input["generated_sql"] = repaired_sql
+            else:
+                fallback_sql = self._fallback_sql(input["retrieval_result"])
+                if fallback_sql:
+                    input["generated_sql"] = fallback_sql
+                else:
+                    raise ValueError(
+                        "Generated SQL failed plan compliance, repair did not succeed, "
+                        "and no fallback SQL template was retrieved."
+                    )
+
         validation_error = self._validation_error(
             input["generated_sql"],
             input["retrieval_result"],
@@ -44,10 +79,15 @@ class SQLSkill(BaseSkill):
                 input["retrieval_result"],
                 input["generated_sql"],
                 validation_error,
+                query_plan,
             )
             if repaired_sql and not self._validation_error(
                 repaired_sql,
                 input["retrieval_result"],
+            ) and not self.service.plan_compliance_error(
+                input["user_query"],
+                repaired_sql,
+                query_plan,
             ):
                 input["generated_sql"] = repaired_sql
             else:

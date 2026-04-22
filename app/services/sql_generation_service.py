@@ -1,5 +1,6 @@
 import json
 import re
+from pathlib import Path
 
 from langchain_openai import ChatOpenAI
 from app.core.config import settings
@@ -23,11 +24,40 @@ SQL_ALIAS_SPACING_PATTERN = re.compile(
 )
 QUOTED_SQL_TEXT_PATTERN = re.compile(r"('(?:''|[^'])*'|\"(?:\"\"|[^\"])*\")")
 JSON_OBJECT_PATTERN = re.compile(r"\{.*\}", re.DOTALL)
+SQL_TABLE_REFERENCE_PATTERN = re.compile(
+    r"\b(?:from|join)\s+([A-Za-z_][A-Za-z0-9_]*)",
+    re.IGNORECASE,
+)
+SQL_SELECT_CLAUSE_PATTERN = re.compile(
+    r"\bselect\b(?P<select>.*?)\bfrom\b",
+    re.IGNORECASE | re.DOTALL,
+)
+QUERIED_BRANCH_NAME_PATTERN = re.compile(r"\b([A-Za-z]+ Branch)\b", re.IGNORECASE)
+
+
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+KB_DIR = BASE_DIR / "kb"
+FULL_SCHEMA_DOCS_PATH = KB_DIR / "schema_docs.json"
+
+ENTITY_TABLE_MAP = {
+    "customer": "customers",
+    "customers": "customers",
+    "relationship_manager": "relationship_managers",
+    "relationship_managers": "relationship_managers",
+    "rm": "relationship_managers",
+    "branch": "branches",
+    "branches": "branches",
+    "deposit": "deposits",
+    "deposits": "deposits",
+}
 
 
 class SQLGenerationService:
     def __init__(self):
         self.llm = None
+        self.last_query_plan = {}
+        self._schema_docs = self._load_full_schema_docs()
+        self._metric_to_tables = self._build_metric_table_map(self._schema_docs)
 
         if settings.OPENROUTER_API_KEY:
             self.llm = ChatOpenAI(
@@ -318,8 +348,10 @@ class SQLGenerationService:
         retrieval_result: dict,
         previous_sql: str,
         error_message: str,
+        query_plan: dict | None = None,
     ) -> str:
         sections = [
+            self._build_plan_block(query_plan),
             "\n".join(
                 [
                     "You are a senior Text-to-SQL assistant.",
@@ -333,6 +365,7 @@ class SQLGenerationService:
                     "5. Fix the SQL based on the user query and the reported error.",
                     "6. You may ignore the previous SQL structure if it is incorrect.",
                     "7. Use business context only when it helps interpret the user query.",
+                    "8. If a Query Plan is provided, the repaired SQL MUST satisfy it exactly.",
                 ]
             ),
             self._build_schema_block(retrieval_result),
@@ -402,6 +435,7 @@ class SQLGenerationService:
         retrieval_result: dict,
         previous_sql: str,
         error_message: str,
+        query_plan: dict | None = None,
     ) -> str:
         if not self.llm:
             return ""
@@ -411,6 +445,7 @@ class SQLGenerationService:
             retrieval_result,
             previous_sql,
             error_message,
+            query_plan,
         )
 
         try:
@@ -471,6 +506,214 @@ class SQLGenerationService:
         }
         return normalized_plan
 
+    def plan_compliance_error(
+        self,
+        user_query: str,
+        sql: str,
+        query_plan: dict | None,
+    ) -> str | None:
+        if not query_plan or not sql:
+            return None
+
+        sql_lower = sql.lower()
+        used_tables = self._extract_sql_tables(sql_lower)
+        select_clause = self._extract_select_clause(sql_lower)
+
+        metric = query_plan.get("metric")
+        aggregation = query_plan.get("aggregation")
+        target_entity = query_plan.get("target_entity")
+        target_table = self._entity_table(target_entity)
+        metric_table = self._required_metric_table(metric)
+
+        if metric and not self._has_metric_projection(sql_lower, select_clause, metric, aggregation):
+            return (
+                f"SQL plan compliance failed: missing metric projection for '{metric}'. "
+                "The SQL must include the metric in SELECT or include the required aggregation."
+            )
+
+        if metric_table and metric_table not in used_tables:
+            return (
+                f"SQL plan compliance failed: missing required table '{metric_table}' "
+                f"for metric '{metric}'."
+            )
+
+        if not self._has_required_join_path(used_tables, target_table, metric_table):
+            return (
+                "SQL plan compliance failed: missing required join path between the "
+                f"target entity '{target_entity}' and metric '{metric}'."
+            )
+
+        filter_error = self._filter_compliance_error(user_query, sql_lower, used_tables)
+        if filter_error:
+            return filter_error
+
+        return None
+
+    def _load_full_schema_docs(self) -> list[dict]:
+        with open(FULL_SCHEMA_DOCS_PATH, "r", encoding="utf-8") as file:
+            return json.load(file)
+
+    def _build_metric_table_map(self, schema_docs: list[dict]) -> dict[str, set[str]]:
+        metric_to_tables: dict[str, set[str]] = {}
+        for item in schema_docs:
+            table_name = item.get("table_name")
+            if not table_name:
+                continue
+
+            for column in item.get("columns", []):
+                column_name = column.get("name")
+                if not column_name:
+                    continue
+                metric_to_tables.setdefault(column_name.lower(), set()).add(
+                    table_name.lower()
+                )
+
+        return metric_to_tables
+
+    def _extract_sql_tables(self, sql: str) -> set[str]:
+        return {
+            match.group(1).lower()
+            for match in SQL_TABLE_REFERENCE_PATTERN.finditer(sql)
+        }
+
+    def _extract_select_clause(self, sql: str) -> str:
+        select_match = SQL_SELECT_CLAUSE_PATTERN.search(sql)
+        if not select_match:
+            return ""
+        return select_match.group("select")
+
+    def _entity_table(self, target_entity: str | None) -> str | None:
+        if not target_entity:
+            return None
+        return ENTITY_TABLE_MAP.get(target_entity.lower())
+
+    def _required_metric_table(self, metric: str | None) -> str | None:
+        if not metric:
+            return None
+
+        metric_tables = self._metric_to_tables.get(metric.lower(), set())
+        if len(metric_tables) == 1:
+            return next(iter(metric_tables))
+        return None
+
+    def _has_metric_projection(
+        self,
+        sql: str,
+        select_clause: str,
+        metric: str,
+        aggregation: str | None,
+    ) -> bool:
+        metric_lower = metric.lower()
+        if metric_lower in select_clause:
+            return True
+
+        if aggregation:
+            aggregation_lower = aggregation.lower()
+            aggregated_metric_pattern = re.compile(
+                rf"\b{re.escape(aggregation_lower)}\s*\(\s*(?:[A-Za-z_][A-Za-z0-9_]*\.)?{re.escape(metric_lower)}\s*\)",
+                re.IGNORECASE,
+            )
+            if aggregated_metric_pattern.search(sql):
+                return True
+
+        return False
+
+    def _has_required_join_path(
+        self,
+        used_tables: set[str],
+        target_table: str | None,
+        metric_table: str | None,
+    ) -> bool:
+        if not metric_table or not target_table:
+            return True
+
+        if metric_table == target_table:
+            return True
+
+        if metric_table == "deposits" and target_table in {"customers", "deposits"}:
+            return "deposits" in used_tables
+
+        if metric_table == "deposits" and target_table in {
+            "relationship_managers",
+            "branches",
+        }:
+            return {
+                "deposits",
+                "customers",
+                target_table,
+            }.issubset(used_tables)
+
+        return True
+
+    def _filter_compliance_error(
+        self,
+        user_query: str,
+        sql: str,
+        used_tables: set[str],
+    ) -> str | None:
+        user_query_lower = user_query.lower()
+
+        branch_name_match = QUERIED_BRANCH_NAME_PATTERN.search(user_query)
+        if branch_name_match:
+            branch_name = branch_name_match.group(1).lower()
+            if "branches" not in used_tables:
+                return (
+                    "SQL plan compliance failed: branch-scoped query is missing the "
+                    "'branches' table."
+                )
+            if branch_name not in sql or "branch_name" not in sql or "where" not in sql:
+                return (
+                    "SQL plan compliance failed: missing branch filter for "
+                    f"'{branch_name_match.group(1)}'."
+                )
+
+        if self._requires_rm_filter(user_query_lower):
+            if "relationship_managers" not in used_tables:
+                return (
+                    "SQL plan compliance failed: relationship-manager-scoped query is "
+                    "missing the 'relationship_managers' table."
+                )
+            if "rm_name" not in sql or "where" not in sql:
+                return (
+                    "SQL plan compliance failed: missing relationship manager filter."
+                )
+
+        return None
+
+    def _requires_rm_filter(self, user_query_lower: str) -> bool:
+        if "managed by" in user_query_lower and "each relationship manager" not in user_query_lower:
+            return True
+
+        if "relationship manager" in user_query_lower and any(
+            token in user_query_lower for token in ["alice", "brian", "cindy", "david", "eva"]
+        ):
+            return True
+
+        return False
+
+    def _repair_for_compliance(
+        self,
+        user_query: str,
+        retrieval_result: dict,
+        sql: str,
+        query_plan: dict | None,
+        error_message: str,
+    ) -> str:
+        repaired_sql = self.repair_sql(
+            user_query,
+            retrieval_result,
+            sql,
+            error_message,
+            query_plan,
+        )
+        if not repaired_sql or not repaired_sql.lower().startswith("select"):
+            return ""
+
+        if self.plan_compliance_error(user_query, repaired_sql, query_plan):
+            return ""
+
+        return repaired_sql
+
     def generate_sql(self, user_query: str, retrieval_result: dict) -> str:
         if not self.llm:
             return self._fallback_or_raise(
@@ -479,6 +722,7 @@ class SQLGenerationService:
             )
 
         query_plan = self.plan_query(user_query, retrieval_result)
+        self.last_query_plan = query_plan
         prompt = self.build_prompt(user_query, retrieval_result, query_plan)
 
         try:
@@ -487,10 +731,11 @@ class SQLGenerationService:
             sql = self.clean_generated_sql(response.content)
             print(f"Cleaned SQL: {sql}")
             if not sql or not sql.lower().startswith("select"):
-                repaired_sql = self.repair_sql(
+                repaired_sql = self._repair_for_compliance(
                     user_query,
                     retrieval_result,
                     sql or response.content,
+                    query_plan,
                     "Generated SQL was malformed or did not start with SELECT.",
                 )
                 if repaired_sql:
@@ -499,6 +744,23 @@ class SQLGenerationService:
                     retrieval_result,
                     "SQL generation failed and no fallback SQL template was retrieved.",
                 )
+            compliance_error = self.plan_compliance_error(user_query, sql, query_plan)
+            if compliance_error:
+                print(compliance_error)
+                repaired_sql = self._repair_for_compliance(
+                    user_query,
+                    retrieval_result,
+                    sql,
+                    query_plan,
+                    compliance_error,
+                )
+                if repaired_sql:
+                    return repaired_sql
+                return self._fallback_or_raise(
+                    retrieval_result,
+                    "SQL generation failed plan compliance and no fallback SQL template was retrieved.",
+                )
+
             return sql
         except Exception as e:
             print(f"LLM generation failed, fallback to template. Reason: {e}")

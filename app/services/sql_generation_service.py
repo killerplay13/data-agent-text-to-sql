@@ -1,3 +1,4 @@
+import json
 import re
 
 from langchain_openai import ChatOpenAI
@@ -21,6 +22,7 @@ SQL_ALIAS_SPACING_PATTERN = re.compile(
     re.IGNORECASE,
 )
 QUOTED_SQL_TEXT_PATTERN = re.compile(r"('(?:''|[^'])*'|\"(?:\"\"|[^\"])*\")")
+JSON_OBJECT_PATTERN = re.compile(r"\{.*\}", re.DOTALL)
 
 
 class SQLGenerationService:
@@ -35,76 +37,329 @@ class SQLGenerationService:
                 temperature=0
             )
 
-    def build_prompt(self, user_query: str, retrieval_result: dict) -> str:
-        schema_text = "\n\n".join(
+    def build_prompt(
+        self,
+        user_query: str,
+        retrieval_result: dict,
+        query_plan: dict | None = None,
+    ) -> str:
+        sections = [
+            self._build_plan_block(query_plan),
+            self._build_instruction_block(),
+            self._build_schema_block(retrieval_result),
+            self._build_template_block(retrieval_result),
+            self._build_business_context_block(retrieval_result),
+            self._build_user_query_block(user_query),
+        ]
+        return "\n\n".join(section for section in sections if section)
+
+    def _build_instruction_block(self) -> str:
+        instructions = [
+            "You are a senior Text-to-SQL assistant.",
+            "Generate a single valid SQLite SELECT query that answers the user query.",
+            "",
+            "Instructions:",
+            "1. Output exactly one SQL SELECT query and nothing else.",
+            "2. The response must start with SELECT.",
+            "3. Do not include explanations, markdown, code fences, or bullet points.",
+            "4. Only generate SQL for SQLite.",
+            "5. You MUST only use tables and columns provided in the schema.",
+            "6. Map user query terms to schema tables and columns.",
+            "7. Do not invent tables or columns.",
+            "8. Use schema to determine joins and filters.",
+            "9. Always prioritize correctness based on the user query and schema.",
+            (
+                "10. Use SQL templates as reference examples when helpful, "
+                "but do NOT blindly copy them."
+            ),
+            "11. You may adapt or ignore templates if they do not match the user query.",
+            "12. Reuse only the parts of a template that are consistent with the query intent and schema.",
+            "13. Use business context definitions to interpret business terms.",
+            "14. Apply business rules only when relevant to the query.",
+            "15. Only use aggregation, ranking, filtering, ordering, or limits when needed for the user query.",
+            (
+                '16. If the user asks for ranking with words like "highest", "top", '
+                '"maximum", or "largest", identify the correct metric column and use '
+                "ORDER BY <metric> DESC with LIMIT when returning the top result set."
+            ),
+            (
+                '17. If the user asks for lowest-value ranking with words like "lowest", '
+                '"smallest", or "minimum", identify the correct metric column and use '
+                "ORDER BY <metric> ASC with LIMIT when returning the lowest result set."
+            ),
+            "18. If the user asks for counts, use COUNT() on the correct schema-backed entity.",
+            "19. If the user asks for totals, use SUM() on the correct metric column.",
+            "20. If the user asks for averages, use AVG() on the correct metric column.",
+            (
+                '21. If the query compares groups such as "which branch", '
+                '"which manager", or other grouped categories, use GROUP BY on the '
+                "appropriate grouping column when needed."
+            ),
+            (
+                "22. Always identify the correct metric column from the schema or "
+                "business context before applying ranking, COUNT(), SUM(), AVG(), "
+                "or GROUP BY logic."
+            ),
+            "23. Before generating SQL, identify the business metric implied by the query.",
+            (
+                "24. Map business terms to the correct schema-backed metric column using "
+                "the schema and business context."
+            ),
+            (
+                '25. Examples of correct metric grounding: "deposit" -> deposit_amount, '
+                '"number of customers" -> COUNT(customer_id), '
+                '"average deposit" -> AVG(deposit_amount).'
+            ),
+            (
+                "26. Do NOT use identifier columns such as customer_id, branch_id, rm_id, "
+                "or other *_id fields as ranking metrics unless the user explicitly asks for IDs."
+            ),
+            (
+                "27. Ranking must use a business metric column or derived business metric, "
+                "not a surrogate key."
+            ),
+            (
+                "28. Distinguish between the entity to return and the metric used to rank or filter."
+            ),
+            (
+                '29. Example: "Who has the highest deposit?" means return customer_name '
+                "but rank by deposit_amount DESC with LIMIT 1."
+            ),
+            (
+                "30. If the metric column lives in another table, join to that table instead "
+                "of staying on a table that only contains the return field."
+            ),
+            (
+                '31. Example: "Who has the highest deposit?" -> return customer_name, '
+                "rank by deposit_amount DESC, LIMIT 1."
+            ),
+            (
+                '32. Example: "Which branch has the most customers?" -> GROUP BY branch, '
+                "COUNT(customer_id), ORDER BY count DESC, LIMIT 1."
+            ),
+            (
+                '33. Example: "Which RM has the highest average deposit?" -> GROUP BY rm, '
+                "AVG(deposit_amount), ORDER BY avg DESC, LIMIT 1."
+            ),
+        ]
+        return "\n".join(instructions)
+
+    def _build_schema_block(self, retrieval_result: dict) -> str:
+        schema_docs = retrieval_result.get("schema_docs", [])
+        if not schema_docs:
+            return "Schema:\nNo schema documents were retrieved."
+
+        schema_entries = []
+        for item in schema_docs:
+            columns = "\n".join(
+                [
+                    (
+                        f"  - {col['name']} ({col.get('data_type', 'UNKNOWN')}): "
+                        f"{col.get('description', 'No description provided.')}"
+                    )
+                    for col in item["columns"]
+                ]
+            )
+            schema_entries.append(
+                "\n".join(
+                    [
+                        f"Table: {item['table_name']}",
+                        f"Description: {item['description']}",
+                        "Columns:",
+                        columns,
+                    ]
+                )
+            )
+
+        return "Schema:\n" + "\n\n".join(schema_entries)
+
+    def _build_plan_block(self, query_plan: dict | None) -> str:
+        if not query_plan:
+            return ""
+
+        return "\n".join(
             [
-                f"Table: {item['table_name']}\nDescription: {item['description']}\nColumns: "
-                + ", ".join([col["name"] for col in item["columns"]])
-                for item in retrieval_result["schema_docs"]
+                "Query Plan:",
+                json.dumps(query_plan, ensure_ascii=False, indent=2),
+                "",
+                "Plan Enforcement Rules:",
+                "1. You MUST follow the Query Plan exactly.",
+                "2. Do NOT ignore or override the plan.",
+                "3. The SQL must implement all fields in the plan.",
+                "4. target_entity must determine the main entity returned by the SELECT clause.",
+                "5. metric must appear in the SQL either directly or through the required aggregation.",
+                '6. If aggregation is present, you MUST apply it exactly as defined in the plan.',
+                '7. If group_by is present, you MUST use GROUP BY exactly as required by the plan.',
+                '8. If order_by is present, you MUST use ORDER BY exactly as defined in the plan.',
+                '9. If limit is present, you MUST use LIMIT with that exact value.',
+                "10. If the SQL does not match the plan, it is incorrect.",
+                "",
+                "Plan Example:",
+                "{",
+                '  "target_entity": "customer",',
+                '  "metric": "deposit_amount",',
+                '  "aggregation": null,',
+                '  "group_by": null,',
+                '  "order_by": "deposit_amount DESC",',
+                '  "limit": 1',
+                "}",
+                "",
+                "Correct SQL Example:",
+                "SELECT c.customer_name",
+                "FROM customers c",
+                "JOIN deposits d ON c.customer_id = d.customer_id",
+                "ORDER BY d.deposit_amount DESC",
+                "LIMIT 1",
+                "",
+                "Incorrect SQL Example:",
+                "SELECT customer_name FROM customers LIMIT 1",
             ]
         )
 
-        template_text = "\n\n".join(
+    def _build_template_block(self, retrieval_result: dict) -> str:
+        templates = retrieval_result.get("sql_templates", [])
+        if not templates:
+            return (
+                "SQL Templates:\n"
+                "No SQL templates were retrieved. Generate SQL directly from the user query and schema."
+            )
+
+        template_entries = []
+        for item in templates:
+            template_entries.append(
+                "\n".join(
+                    [
+                        f"Template Name: {item['name']}",
+                        f"Example Question: {item['question_example']}",
+                        f"SQL Example: {item['sql']}",
+                        f"Business Description: {item['business_description']}",
+                    ]
+                )
+            )
+
+        return (
+            "SQL Templates:\n"
+            "Use these as optional reference examples. Prefer query-schema correctness over template similarity.\n\n"
+            + "\n\n".join(template_entries)
+        )
+
+    def _build_business_context_block(self, retrieval_result: dict) -> str:
+        business_context = retrieval_result.get("business_context", [])
+        if not business_context:
+            return "Business Context:\nNo business context was retrieved."
+
+        context_entries = []
+        for item in business_context:
+            context_entries.append(
+                "\n".join(
+                    [
+                        f"Topic: {item['topic']}",
+                        f"Definition: {item['description']}",
+                    ]
+                )
+            )
+
+        return "Business Context:\n" + "\n\n".join(context_entries)
+
+    def _build_user_query_block(self, user_query: str) -> str:
+        return "\n".join(
             [
-                f"Template Name: {item['name']}\nExample Question: {item['question_example']}\nSQL: {item['sql']}\nBusiness Description: {item['business_description']}"
-                for item in retrieval_result["sql_templates"]
+                "User Query:",
+                user_query,
+                "",
+                "Return the SQL query only.",
             ]
         )
 
-        context_text = "\n\n".join(
-            [
-                f"Topic: {item['topic']}\nDescription: {item['description']}"
-                for item in retrieval_result["business_context"]
-            ]
-        )
+    def build_plan_prompt(self, user_query: str, retrieval_result: dict) -> str:
+        sections = [
+            "\n".join(
+                [
+                    "You are a senior Text-to-SQL planner.",
+                    "Analyze the user query and return a JSON object that plans the SQL query.",
+                    "",
+                    "Planning Rules:",
+                    "1. Return valid JSON only.",
+                    (
+                        '2. Use exactly these keys: "target_entity", "metric", '
+                        '"aggregation", "group_by", "order_by", "limit".'
+                    ),
+                    "3. target_entity should describe the main entity the query wants returned or compared.",
+                    "4. metric should identify the business metric column or derived metric implied by the query.",
+                    '5. aggregation must be one of null, "COUNT", "SUM", or "AVG".',
+                    "6. group_by should be the grouping column when the query compares groups; otherwise null.",
+                    "7. order_by should describe the intended ranking or sorting expression; otherwise null.",
+                    "8. limit should be an integer when the query asks for a top or bottom result; otherwise null.",
+                    "9. Identify the entity requested by who/which phrasing.",
+                    "10. Identify the correct metric using schema and business context.",
+                    "11. Use COUNT for counts, SUM for totals, AVG for averages.",
+                    "12. Use ranking and limit for highest, top, maximum, largest, lowest, smallest, or minimum queries.",
+                    "13. Do not use *_id columns as business ranking metrics unless the user explicitly asks for IDs.",
+                    "14. If the metric lives in another table, plan for it anyway by naming the correct metric column.",
+                ]
+            ),
+            self._build_schema_block(retrieval_result),
+            self._build_template_block(retrieval_result),
+            self._build_business_context_block(retrieval_result),
+            "\n".join(
+                [
+                    "User Query:",
+                    user_query,
+                    "",
+                    "Return the JSON plan only.",
+                ]
+            ),
+        ]
+        return "\n\n".join(section for section in sections if section)
 
-        return f"""
-You are a senior Text-to-SQL assistant.
+    def build_repair_prompt(
+        self,
+        user_query: str,
+        retrieval_result: dict,
+        previous_sql: str,
+        error_message: str,
+    ) -> str:
+        sections = [
+            "\n".join(
+                [
+                    "You are a senior Text-to-SQL assistant.",
+                    "Repair the SQL query so it becomes a single valid SQLite SELECT query.",
+                    "",
+                    "Instructions:",
+                    "1. Return corrected SQL only.",
+                    "2. The response must start with SELECT.",
+                    "3. Do not include explanations, markdown, code fences, or bullet points.",
+                    "4. Use only tables and columns provided in the schema.",
+                    "5. Fix the SQL based on the user query and the reported error.",
+                    "6. You may ignore the previous SQL structure if it is incorrect.",
+                    "7. Use business context only when it helps interpret the user query.",
+                ]
+            ),
+            self._build_schema_block(retrieval_result),
+            self._build_template_block(retrieval_result),
+            self._build_business_context_block(retrieval_result),
+            "\n".join(
+                [
+                    "User Query:",
+                    user_query,
+                    "",
+                    "Previous SQL:",
+                    previous_sql or "None",
+                    "",
+                    "Validation or Execution Error:",
+                    error_message,
+                    "",
+                    "Return the corrected SQL query only.",
+                ]
+            ),
+        ]
+        return "\n\n".join(section for section in sections if section)
 
-Your task is to generate a single valid SQLite SELECT query based on the user's question.
-
-Rules:
-1. Only generate SQL.
-2. Only generate ONE query.
-3. Only use the tables and columns provided below.
-4. Do not invent tables or columns.
-5. Only output a SELECT query. Never output DELETE, UPDATE, INSERT, DROP, ALTER, or explanations.
-6. The target database is SQLite.
-7. Output exactly one SQL SELECT query and nothing else.
-8. Do not include explanations.
-9. Do not include markdown.
-10. Do not include code fences.
-11. Do not include bullet points.
-12. The response must start with SELECT.
-13. The retrieved SQL templates are the PRIMARY reference.
-14. You MUST follow the structure of the closest SQL template.
-15. If a SQL template is relevant, you MUST reuse its joins and structure.
-16. Do not generate a new SQL query from scratch.
-17. Do not simplify the query by removing joins or filters.
-18. Do not change the business logic, ranking, filtering, or aggregation intent of the template.
-19. Only adapt filters, limits, or ordering when explicitly required by the user's question.
-20. Do not introduce SUM, AVG, COUNT, or GROUP BY unless clearly needed by the user's question.
-
-User Question:
-{user_query}
-
-Relevant Schema:
-{schema_text}
-
-Relevant SQL Templates:
-{template_text}
-
-Relevant Business Context:
-{context_text}
-
-Now generate the SQL query only.
-""".strip()
-
-    def fallback_sql(self, retrieval_result: dict) -> str:
+    def fallback_sql(self, retrieval_result: dict) -> str | None:
         templates = retrieval_result.get("sql_templates", [])
         if templates:
             return templates[0]["sql"]
-        raise ValueError("No SQL template available for fallback.")
+        return None
 
     def clean_generated_sql(self, content: str) -> str:
         sql = self._extract_sql(content)
@@ -141,11 +396,90 @@ Now generate the SQL query only.
 
         return "".join(parts)
 
+    def repair_sql(
+        self,
+        user_query: str,
+        retrieval_result: dict,
+        previous_sql: str,
+        error_message: str,
+    ) -> str:
+        if not self.llm:
+            return ""
+
+        repair_prompt = self.build_repair_prompt(
+            user_query,
+            retrieval_result,
+            previous_sql,
+            error_message,
+        )
+
+        try:
+            response = self.llm.invoke(repair_prompt)
+            print(f"Raw LLM SQL repair response: {response.content}")
+            repaired_sql = self.clean_generated_sql(response.content)
+            print(f"Cleaned repaired SQL: {repaired_sql}")
+            if not repaired_sql or not repaired_sql.lower().startswith("select"):
+                return ""
+            return repaired_sql
+        except Exception as e:
+            print(f"LLM SQL repair failed. Reason: {e}")
+            return ""
+
+    def plan_query(self, user_query: str, retrieval_result: dict) -> dict:
+        if not self.llm:
+            return {}
+
+        plan_prompt = self.build_plan_prompt(user_query, retrieval_result)
+
+        try:
+            response = self.llm.invoke(plan_prompt)
+            print(f"Raw LLM query plan response: {response.content}")
+            query_plan = self._parse_query_plan(response.content)
+            print(f"Parsed query plan: {query_plan}")
+            return query_plan
+        except Exception as e:
+            print(f"LLM query planning failed. Reason: {e}")
+            return {}
+
+    def _fallback_or_raise(self, retrieval_result: dict, reason: str) -> str:
+        fallback_sql = self.fallback_sql(retrieval_result)
+        if fallback_sql:
+            return fallback_sql
+        raise ValueError(reason)
+
+    def _parse_query_plan(self, content: str) -> dict:
+        raw_content = content.strip()
+        json_match = JSON_OBJECT_PATTERN.search(raw_content)
+        if json_match:
+            raw_content = json_match.group(0)
+
+        try:
+            parsed = json.loads(raw_content)
+        except json.JSONDecodeError:
+            return {}
+
+        if not isinstance(parsed, dict):
+            return {}
+
+        normalized_plan = {
+            "target_entity": parsed.get("target_entity"),
+            "metric": parsed.get("metric"),
+            "aggregation": parsed.get("aggregation"),
+            "group_by": parsed.get("group_by"),
+            "order_by": parsed.get("order_by"),
+            "limit": parsed.get("limit"),
+        }
+        return normalized_plan
+
     def generate_sql(self, user_query: str, retrieval_result: dict) -> str:
         if not self.llm:
-            return self.fallback_sql(retrieval_result)
+            return self._fallback_or_raise(
+                retrieval_result,
+                "LLM SQL generation is unavailable and no fallback SQL template was retrieved.",
+            )
 
-        prompt = self.build_prompt(user_query, retrieval_result)
+        query_plan = self.plan_query(user_query, retrieval_result)
+        prompt = self.build_prompt(user_query, retrieval_result, query_plan)
 
         try:
             response = self.llm.invoke(prompt)
@@ -153,8 +487,22 @@ Now generate the SQL query only.
             sql = self.clean_generated_sql(response.content)
             print(f"Cleaned SQL: {sql}")
             if not sql or not sql.lower().startswith("select"):
-                return self.fallback_sql(retrieval_result)
+                repaired_sql = self.repair_sql(
+                    user_query,
+                    retrieval_result,
+                    sql or response.content,
+                    "Generated SQL was malformed or did not start with SELECT.",
+                )
+                if repaired_sql:
+                    return repaired_sql
+                return self._fallback_or_raise(
+                    retrieval_result,
+                    "SQL generation failed and no fallback SQL template was retrieved.",
+                )
             return sql
         except Exception as e:
             print(f"LLM generation failed, fallback to template. Reason: {e}")
-            return self.fallback_sql(retrieval_result)
+            return self._fallback_or_raise(
+                retrieval_result,
+                "LLM SQL generation failed and no fallback SQL template was retrieved.",
+            )

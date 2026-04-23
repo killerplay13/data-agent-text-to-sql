@@ -58,11 +58,20 @@ def evaluate_case(
     ground_truth_sql = case["ground_truth_sql"]
 
     retrieval_result = retrieval_service.retrieve(question)
-    generated_sql = sql_service.generate_sql(question, retrieval_result)
+    sql_templates = retrieval_result.get("sql_templates", [])
+    first_template = None
+    if sql_templates:
+        first_template = (
+            sql_templates[0].get("name")
+            or sql_templates[0].get("question_example")
+            or "Unnamed template"
+        )
 
-    generated_result = None
+    generated_sql = ""
+    generated_result = []
     error_message = None
     try:
+        generated_sql = sql_service.generate_sql(question, retrieval_result)
         generated_result = execution_service.execute_query(generated_sql)
     except Exception as exc:
         error_message = str(exc)
@@ -74,23 +83,18 @@ def evaluate_case(
             f"Ground truth SQL failed for case {index}: {question}. Reason: {exc}"
         ) from exc
 
-    sql_valid = error_message is None
-    exact_match = normalize_sql(generated_sql) == normalize_sql(ground_truth_sql)
+    sql_valid = error_message is None and bool(generated_sql)
+    exact_match = (
+        normalize_sql(generated_sql) == normalize_sql(ground_truth_sql)
+        if generated_sql
+        else False
+    )
     result_match = (
         normalize_result_rows(generated_result)
         == normalize_result_rows(ground_truth_result)
         if sql_valid
         else False
     )
-
-    sql_templates = retrieval_result.get("sql_templates", [])
-    first_template = None
-    if sql_templates:
-        first_template = (
-            sql_templates[0].get("name")
-            or sql_templates[0].get("question_example")
-            or "Unnamed template"
-        )
 
     return {
         "case": index,

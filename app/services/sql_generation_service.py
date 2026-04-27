@@ -62,7 +62,13 @@ ENTITY_SELECT_COLUMN_MAP = {
 }
 
 SUPPORTED_AGGREGATIONS = {"count", "sum", "avg"}
-SUPPORTED_QUERY_TYPES = {"row_ranking", "group_ranking", "group_listing", "scalar"}
+SUPPORTED_QUERY_TYPES = {
+    "row_ranking",
+    "group_ranking",
+    "group_listing",
+    "scalar",
+    "simple_filter",
+}
 
 
 class SQLGenerationService:
@@ -179,12 +185,28 @@ class SQLGenerationService:
                 "rank by deposit_amount DESC, LIMIT 1."
             ),
             (
-                '34. Example: "Which branch has the most customers?" -> GROUP BY branch, '
-                "COUNT(customer_id), ORDER BY count DESC, LIMIT 1."
+                '34. Example: "Which branch has the most customers?" -> return branch_name only, '
+                "GROUP BY branch, COUNT(customer_id), ORDER BY count DESC, LIMIT 1."
             ),
             (
-                '35. Example: "Which RM has the highest average deposit?" -> GROUP BY rm, '
-                "AVG(deposit_amount), ORDER BY avg DESC, LIMIT 1."
+                '35. Example: "Which RM has the highest average deposit?" -> return rm_name only, '
+                "GROUP BY rm, AVG(deposit_amount), ORDER BY avg DESC, LIMIT 1."
+            ),
+            (
+                "36. For customer row_ranking, always join customers, select customer_name, "
+                "and never alias customer_id as customer_name."
+            ),
+            (
+                "37. For group_ranking, SELECT only the ranked entity column; use aggregation "
+                "in ORDER BY, HAVING, or expressions but not as a returned column unless asked."
+            ),
+            (
+                "38. Deposits connect to branches or RMs through customers; never join deposits "
+                "directly to branches."
+            ),
+            (
+                '39. For row-level deposit questions such as "which deposits are above", '
+                "include customer_name with deposit_amount."
             ),
         ]
         return "\n".join(instructions)
@@ -232,7 +254,7 @@ class SQLGenerationService:
                 "2. Do NOT ignore or override the plan.",
                 "3. The SQL must implement all fields in the plan.",
                 "4. target_entity must determine the main entity returned by the SELECT clause.",
-                "5. query_type controls whether the query is row-level ranking, grouped ranking, grouped listing, or scalar aggregation.",
+                "5. query_type controls whether the query is row-level ranking, grouped ranking, grouped listing, scalar aggregation, or simple filtering.",
                 "6. You MUST include all required select_columns in the SELECT clause.",
                 "7. Do NOT omit required select_columns.",
                 "8. Extra SELECT columns are allowed when they do not conflict with the query intent.",
@@ -264,6 +286,32 @@ class SQLGenerationService:
                 "",
                 "Incorrect SQL Example:",
                 "SELECT customer_name, MIN(customer_id) AS example_customer FROM customers LIMIT 1",
+                "",
+                "Group Ranking Example:",
+                "{",
+                '  "query_type": "group_ranking",',
+                '  "target_entity": "branch",',
+                '  "metric": "customer_id",',
+                '  "aggregation": "COUNT",',
+                '  "select_columns": ["branch_name"],',
+                '  "group_by": "branch_name",',
+                '  "order_by": "COUNT(customer_id) DESC",',
+                '  "limit": 1',
+                "}",
+                "For group_ranking, return the entity only. Do not include the aggregated metric in SELECT unless explicitly requested.",
+                "",
+                "Simple Filter Example:",
+                "{",
+                '  "query_type": "simple_filter",',
+                '  "target_entity": "customer",',
+                '  "metric": null,',
+                '  "aggregation": null,',
+                '  "select_columns": ["customer_name"],',
+                '  "group_by": null,',
+                '  "order_by": "customer_name ASC",',
+                '  "limit": null',
+                "}",
+                "For simple_filter, do not use aggregation or GROUP BY.",
             ]
         )
 
@@ -336,7 +384,7 @@ class SQLGenerationService:
                         '"metric", "aggregation", "select_columns", "group_by", '
                         '"order_by", "limit".'
                     ),
-                    '3. query_type must be one of "row_ranking", "group_ranking", "group_listing", or "scalar".',
+                    '3. query_type must be one of "row_ranking", "group_ranking", "group_listing", "scalar", or "simple_filter".',
                     "4. target_entity should describe the main entity the query wants returned or compared.",
                     "5. metric should identify the business metric column or derived metric implied by the query.",
                     '6. aggregation must be one of null, "COUNT", "SUM", or "AVG".',
@@ -367,25 +415,40 @@ class SQLGenerationService:
                         'contain the entity only.'
                     ),
                     (
-                        '21. If the query lists grouped results such as "per branch" or '
+                        '21. For group_ranking, do NOT include the aggregated metric alias in '
+                        'select_columns unless the user explicitly asks to see that value.'
+                    ),
+                    (
+                        '22. If the query lists grouped results such as "per branch" or '
                         '"each manager", use query_type "group_listing".'
                     ),
                     (
-                        '22. For group_listing, aggregation is required and select_columns should '
+                        '23. For group_listing, aggregation is required and select_columns should '
                         'contain the entity plus the aggregated metric alias.'
                     ),
                     (
-                        '23. If the query asks for a single aggregated value, use query_type '
+                        '24. If the query asks for a single aggregated value, use query_type '
                         '"scalar".'
                     ),
                     (
-                        '24. For scalar, aggregation is required and select_columns should '
+                        '25. For scalar, aggregation is required and select_columns should '
                         'contain only the aggregated metric alias.'
                     ),
-                    '25. Example: top customer by deposit -> query_type "row_ranking", select_columns ["customer_name", "deposit_amount"].',
-                    '26. Example: branch with most customers -> query_type "group_ranking", select_columns ["branch_name"].',
-                    '27. Example: count per branch -> query_type "group_listing", select_columns ["branch_name", "customer_count"].',
-                    '28. Example: average deposit in Taipei Branch -> query_type "scalar", select_columns ["avg_deposit"].',
+                    (
+                        '26. If the query filters rows such as "customers under RM" or '
+                        '"customers in branch", use query_type "simple_filter".'
+                    ),
+                    (
+                        '27. For simple_filter, aggregation and group_by must be null, '
+                        'and select_columns should contain entity columns only.'
+                    ),
+                    '28. Example: top customer by deposit -> query_type "row_ranking", select_columns ["customer_name", "deposit_amount"].',
+                    '29. Example: branch with most customers -> query_type "group_ranking", select_columns ["branch_name"].',
+                    '30. Example: RM with highest average deposit -> query_type "group_ranking", select_columns ["rm_name"].',
+                    '31. Example: count per branch -> query_type "group_listing", select_columns ["branch_name", "customer_count"].',
+                    '32. Example: average deposit in Taipei Branch -> query_type "scalar", select_columns ["avg_deposit"].',
+                    '33. Example: customers managed by Alice Chen -> query_type "simple_filter", select_columns ["customer_name"].',
+                    '34. Example: customers in Taipei Branch -> query_type "simple_filter", select_columns ["customer_name"].',
                 ]
             ),
             self._build_schema_block(retrieval_result),
@@ -651,6 +714,15 @@ class SQLGenerationService:
         if query_type_error:
             return query_type_error
 
+        row_ranking_error = self._row_ranking_customer_compliance_error(
+            select_clause,
+            used_tables,
+            query_type,
+            target_entity,
+        )
+        if row_ranking_error:
+            return row_ranking_error
+
         select_columns_error = self._select_columns_compliance_error(
             select_clause,
             select_columns,
@@ -678,6 +750,19 @@ class SQLGenerationService:
                 "SQL plan compliance failed: missing required join path between the "
                 f"target entity '{target_entity}' and metric '{metric}'."
             )
+
+        join_error = self._join_compliance_error(sql_lower, used_tables)
+        if join_error:
+            return join_error
+
+        deposit_output_error = self._deposit_output_compliance_error(
+            user_query,
+            select_clause,
+            used_tables,
+            query_type,
+        )
+        if deposit_output_error:
+            return deposit_output_error
 
         filter_error = self._filter_compliance_error(
             user_query,
@@ -870,6 +955,18 @@ class SQLGenerationService:
                     "plan. row_ranking must not use COUNT(), SUM(), or AVG()."
                 )
 
+        if query_type == "simple_filter":
+            if has_group_by:
+                return (
+                    "SQL plan compliance failed: SQL query_type does not match the "
+                    "plan. simple_filter must not use GROUP BY."
+                )
+            if has_aggregation or aggregation:
+                return (
+                    "SQL plan compliance failed: SQL query_type does not match the "
+                    "plan. simple_filter must not use COUNT(), SUM(), or AVG()."
+                )
+
         if query_type in {"group_ranking", "group_listing"} and not has_group_by:
             return (
                 "SQL plan compliance failed: SQL query_type does not match the "
@@ -886,6 +983,40 @@ class SQLGenerationService:
             return (
                 "SQL plan compliance failed: SQL query_type does not match the "
                 "plan. scalar queries must not use GROUP BY."
+            )
+
+        return None
+
+    def _row_ranking_customer_compliance_error(
+        self,
+        select_clause: str,
+        used_tables: set[str],
+        query_type: str | None,
+        target_entity: str | None,
+    ) -> str | None:
+        if query_type != "row_ranking" or self._entity_table(target_entity) != "customers":
+            return None
+
+        if "customers" not in used_tables:
+            return (
+                "SQL plan compliance failed: customer row_ranking must join the "
+                "'customers' table."
+            )
+
+        if "customer_name" not in select_clause:
+            return (
+                "SQL plan compliance failed: customer row_ranking must select "
+                "customer_name."
+            )
+
+        if re.search(
+            r"\bcustomer_id\b\s+(?:as\s+)?customer_name\b",
+            select_clause,
+            re.IGNORECASE,
+        ):
+            return (
+                "SQL plan compliance failed: customer row_ranking must not return "
+                "customer_id as customer_name."
             )
 
         return None
@@ -924,6 +1055,17 @@ class SQLGenerationService:
                 "SQL plan compliance failed: missing required select_columns: "
                 + ", ".join(missing_columns)
             )
+
+        if query_type == "group_ranking":
+            expected_outputs = {
+                column.lower()
+                for column in required_outputs
+            }
+            if actual_outputs != expected_outputs:
+                return (
+                    "SQL plan compliance failed: group_ranking SELECT must include "
+                    "only the entity column."
+                )
 
         return None
 
@@ -1018,6 +1160,74 @@ class SQLGenerationService:
             }.issubset(used_tables)
 
         return True
+
+    def _join_compliance_error(self, sql: str, used_tables: set[str]) -> str | None:
+        if "deposits" in used_tables and "branches" in used_tables:
+            if "customers" not in used_tables:
+                return (
+                    "SQL plan compliance failed: deposits must join to branches "
+                    "through customers."
+                )
+
+            if re.search(
+                r"\bjoin\s+deposits\b(?:(?!\bjoin\b|\bwhere\b|\bgroup\b|\border\b).)*"
+                r"\bon\b(?:(?!\bjoin\b|\bwhere\b|\bgroup\b|\border\b).)*"
+                r"(?:\bbranch_id\b|1\s*=\s*1)",
+                sql,
+                re.IGNORECASE | re.DOTALL,
+            ):
+                return (
+                    "SQL plan compliance failed: deposits must not be joined "
+                    "directly to branches."
+                )
+
+            if re.search(
+                r"\bjoin\s+branches\b(?:(?!\bjoin\b|\bwhere\b|\bgroup\b|\border\b).)*"
+                r"\bon\b(?:(?!\bjoin\b|\bwhere\b|\bgroup\b|\border\b).)*"
+                r"(?:\bdeposit|1\s*=\s*1)",
+                sql,
+                re.IGNORECASE | re.DOTALL,
+            ):
+                return (
+                    "SQL plan compliance failed: deposits must not be joined "
+                    "directly to branches."
+                )
+
+        return None
+
+    def _deposit_output_compliance_error(
+        self,
+        user_query: str,
+        select_clause: str,
+        used_tables: set[str],
+        query_type: str | None,
+    ) -> str | None:
+        user_query_lower = user_query.lower()
+        is_deposit_row_query = (
+            "which deposits" in user_query_lower
+            or "deposits above" in user_query_lower
+            or "deposits over" in user_query_lower
+        )
+
+        if not is_deposit_row_query:
+            return None
+
+        if query_type in {"scalar", "group_ranking", "group_listing"}:
+            return None
+
+        if "customer_name" not in select_clause:
+            return (
+                "SQL plan compliance failed: deposit row queries must select "
+                "customer_name."
+            )
+
+        if "customers" not in used_tables:
+            return (
+                "SQL plan compliance failed: deposit row queries must join the "
+                "'customers' table to return customer_name."
+            )
+
+        return None
 
     def _filter_compliance_error(
         self,

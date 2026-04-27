@@ -2,10 +2,10 @@
   "summary": {
     "total_cases": 17,
     "valid_sql_count": 14,
-    "exact_match_count": 8,
+    "exact_match_count": 7,
     "result_match_count": 14,
     "valid_sql_rate": "14/17 (82.4%)",
-    "exact_match_rate": "8/17 (47.1%)",
+    "exact_match_rate": "7/17 (41.2%)",
     "result_match_rate": "14/17 (82.4%)"
   },
   "cases": [
@@ -139,7 +139,7 @@
       "retrieved_sql_template": "total_deposit_by_branch",
       "retrieved_schema_count": 3,
       "retrieved_business_context_count": 3,
-      "generated_sql": "SELECT b.branch_name, SUM(d.deposit_amount) AS total_deposit\nFROM branches b\nJOIN customers c ON b.branch_id = c.branch_id\nJOIN deposits d ON c.customer_id = d.customer_id\nGROUP BY b.branch_name\nORDER BY total_deposit DESC",
+      "generated_sql": "SELECT b.branch_name, SUM(d.deposit_amount) AS total_deposit\nFROM branches b\nJOIN customers c ON b.branch_id = c.branch_id\nJOIN deposits d ON c.customer_id = d.customer_id\nGROUP BY b.branch_name\nORDER BY total_deposit DESC;",
       "ground_truth_sql": "SELECT b.branch_name, SUM(d.deposit_amount) AS total_deposit FROM branches b JOIN customers c ON b.branch_id = c.branch_id JOIN deposits d ON c.customer_id = d.customer_id GROUP BY b.branch_name ORDER BY total_deposit DESC;",
       "sql_valid": true,
       "exact_match": true,
@@ -278,7 +278,7 @@
       "retrieved_sql_template": "customers_under_rm",
       "retrieved_schema_count": 3,
       "retrieved_business_context_count": 3,
-      "generated_sql": "SELECT c.customer_name\nFROM customers c\nJOIN relationship_managers rm ON c.rm_id = rm.rm_id\nWHERE rm.rm_name = 'Alice Chen';",
+      "generated_sql": "SELECT c.customer_name\nFROM customers c\nJOIN relationship_managers rm ON c.rm_id = rm.rm_id\nWHERE rm.rm_name = 'Alice Chen'",
       "ground_truth_sql": "SELECT c.customer_name FROM customers c JOIN relationship_managers rm ON c.rm_id = rm.rm_id WHERE rm.rm_name = 'Alice Chen' ORDER BY c.customer_name ASC;",
       "sql_valid": true,
       "exact_match": false,
@@ -342,23 +342,23 @@
       "retrieved_sql_template": "customers_under_rm",
       "retrieved_schema_count": 3,
       "retrieved_business_context_count": 3,
-      "generated_sql": "SELECT c.customer_name, d.deposit_amount\nFROM deposits d\nJOIN customers c ON d.customer_id = c.customer_id\nWHERE d.deposit_amount > 5000000;",
+      "generated_sql": "SELECT d.deposit_amount, c.customer_name\nFROM deposits d\nJOIN customers c ON d.customer_id = c.customer_id\nWHERE d.deposit_amount > 5000000",
       "ground_truth_sql": "SELECT c.customer_name, d.deposit_amount FROM customers c JOIN deposits d ON c.customer_id = d.customer_id WHERE d.deposit_amount > 5000000 ORDER BY d.deposit_amount DESC;",
       "sql_valid": true,
       "exact_match": false,
       "result_match": true,
       "generated_result_preview": [
         {
-          "customer_name": "王小明",
-          "deposit_amount": 8000000.0
+          "deposit_amount": 8000000.0,
+          "customer_name": "王小明"
         },
         {
-          "customer_name": "陳美玲",
-          "deposit_amount": 6200000.0
+          "deposit_amount": 6200000.0,
+          "customer_name": "陳美玲"
         },
         {
-          "customer_name": "劉志強",
-          "deposit_amount": 9200000.0
+          "deposit_amount": 9200000.0,
+          "customer_name": "劉志強"
         }
       ],
       "ground_truth_result_preview": [
@@ -447,10 +447,10 @@
       "retrieved_sql_template": "total_deposit_by_branch",
       "retrieved_schema_count": 3,
       "retrieved_business_context_count": 3,
-      "generated_sql": "SELECT AVG(d.deposit_amount) AS avg_deposit\nFROM branches b\nJOIN customers c ON b.branch_id = c.branch_id\nJOIN deposits d ON c.customer_id = d.customer_id\nWHERE b.branch_name = 'Taipei Branch';",
+      "generated_sql": "SELECT AVG(d.deposit_amount) AS avg_deposit\nFROM deposits d\nJOIN customers c ON d.customer_id = c.customer_id\nJOIN branches b ON c.branch_id = b.branch_id\nWHERE b.branch_name = 'Taipei Branch';",
       "ground_truth_sql": "SELECT AVG(d.deposit_amount) AS avg_deposit FROM branches b JOIN customers c ON b.branch_id = c.branch_id JOIN deposits d ON c.customer_id = d.customer_id WHERE b.branch_name = 'Taipei Branch';",
       "sql_valid": true,
-      "exact_match": true,
+      "exact_match": false,
       "result_match": true,
       "generated_result_preview": [
         {

@@ -95,6 +95,7 @@ class SQLGenerationService:
         sections = [
             self._build_plan_block(query_plan),
             self._build_instruction_block(),
+            self._build_group_ranking_guidance_block(query_plan),
             self._build_schema_block(retrieval_result),
             self._build_template_block(retrieval_result),
             self._build_business_context_block(retrieval_result),
@@ -315,6 +316,62 @@ class SQLGenerationService:
             ]
         )
 
+    def _build_group_ranking_guidance_block(
+        self,
+        query_plan: dict | None,
+        error_message: str | None = None,
+    ) -> str:
+        if (query_plan or {}).get("query_type") != "group_ranking":
+            return ""
+
+        target_entity = query_plan.get("target_entity")
+        entity_column = self._required_entity_column(target_entity) or "entity_column"
+        group_by = query_plan.get("group_by") or entity_column
+        order_by = query_plan.get("order_by") or "AGGREGATE(metric) DESC"
+        limit = query_plan.get("limit")
+
+        guidance = [
+            "Group Ranking Rules:",
+            f"1. SELECT only the target entity column: {entity_column}.",
+            "2. Do not include the aggregate metric or aggregate alias in SELECT.",
+            f"3. Use GROUP BY {group_by}.",
+            f"4. Use ORDER BY {order_by}.",
+            "5. Keep the aggregation inside ORDER BY, HAVING, or expressions, not in SELECT.",
+        ]
+
+        if limit is not None:
+            guidance.append(f"6. Use LIMIT {limit}.")
+
+        guidance.extend(
+            [
+                "",
+                "Required Shape:",
+                "SELECT <entity_column>",
+                "FROM ...",
+                "GROUP BY <entity_column>",
+                "ORDER BY <aggregate_expression> DESC",
+                "LIMIT 1",
+                "",
+                "Examples:",
+                "SELECT rm.rm_name FROM relationship_managers rm JOIN customers c ON rm.rm_id = c.rm_id JOIN deposits d ON c.customer_id = d.customer_id GROUP BY rm.rm_name ORDER BY AVG(d.deposit_amount) DESC LIMIT 1",
+                "SELECT b.branch_name FROM branches b JOIN customers c ON b.branch_id = c.branch_id GROUP BY b.branch_name ORDER BY COUNT(c.customer_id) DESC LIMIT 1",
+                "SELECT b.branch_name FROM branches b JOIN customers c ON b.branch_id = c.branch_id JOIN deposits d ON c.customer_id = d.customer_id GROUP BY b.branch_name ORDER BY SUM(d.deposit_amount) DESC LIMIT 1",
+            ]
+        )
+
+        if self._is_group_ranking_missing_entity_error(query_plan, error_message):
+            guidance.extend(
+                [
+                    "",
+                    "Repair Focus:",
+                    f"The previous SQL failed because SELECT did not include {entity_column}.",
+                    f"Discard the previous SELECT clause and regenerate with SELECT {entity_column} only.",
+                    "Do not fallback to a template-shaped answer unless the final SQL fully satisfies the Query Plan.",
+                ]
+            )
+
+        return "\n".join(guidance)
+
     def _build_template_block(self, retrieval_result: dict) -> str:
         templates = retrieval_result.get("sql_templates", [])
         if not templates:
@@ -489,8 +546,11 @@ class SQLGenerationService:
                     "6. You may ignore the previous SQL structure if it is incorrect.",
                     "7. Use business context only when it helps interpret the user query.",
                     "8. If a Query Plan is provided, the repaired SQL MUST satisfy it exactly.",
+                    "9. For group_ranking, regenerate the SQL using the required grouped ranking shape instead of copying the previous SELECT list when it is wrong.",
+                    "10. Do not fallback to a template-shaped answer unless the repaired SQL satisfies the Query Plan.",
                 ]
             ),
+            self._build_group_ranking_guidance_block(query_plan, error_message),
             self._build_schema_block(retrieval_result),
             self._build_template_block(retrieval_result),
             self._build_business_context_block(retrieval_result),
@@ -826,6 +886,55 @@ class SQLGenerationService:
         if len(metric_tables) == 1:
             return next(iter(metric_tables))
         return None
+
+    def _is_group_ranking_missing_entity_error(
+        self,
+        query_plan: dict | None,
+        error_message: str | None,
+    ) -> bool:
+        if (query_plan or {}).get("query_type") != "group_ranking":
+            return False
+
+        if not error_message:
+            return False
+
+        required_entity_column = self._required_entity_column(
+            (query_plan or {}).get("target_entity")
+        )
+        if not required_entity_column:
+            return False
+
+        normalized_error = error_message.lower()
+        return (
+            "select clause must include" in normalized_error
+            and required_entity_column.lower() in normalized_error
+        )
+
+    def _group_ranking_regeneration_error_message(
+        self,
+        query_plan: dict | None,
+        error_message: str,
+    ) -> str:
+        entity_column = self._required_entity_column(
+            (query_plan or {}).get("target_entity")
+        ) or "entity_column"
+        group_by = (query_plan or {}).get("group_by") or entity_column
+        order_by = (query_plan or {}).get("order_by") or "AGGREGATE(metric) DESC"
+        limit = (query_plan or {}).get("limit")
+
+        instructions = [
+            error_message,
+            "Regenerate the SQL using the required group_ranking shape.",
+            f"SELECT only {entity_column}.",
+            "Do not include the aggregate metric in SELECT.",
+            f"GROUP BY {group_by}.",
+            f"ORDER BY {order_by}.",
+        ]
+
+        if limit is not None:
+            instructions.append(f"LIMIT {limit}.")
+
+        return " ".join(instructions)
 
     def _has_metric_projection(
         self,
@@ -1320,13 +1429,38 @@ class SQLGenerationService:
             error_message,
             query_plan,
         )
-        if not repaired_sql or not repaired_sql.lower().startswith("select"):
-            return ""
+        if repaired_sql and repaired_sql.lower().startswith("select"):
+            compliance_error = self.plan_compliance_error(
+                user_query,
+                repaired_sql,
+                query_plan,
+            )
+            if not compliance_error:
+                return repaired_sql
+        else:
+            compliance_error = None
 
-        if self.plan_compliance_error(user_query, repaired_sql, query_plan):
-            return ""
+        if self._is_group_ranking_missing_entity_error(query_plan, error_message):
+            regenerated_sql = self.repair_sql(
+                user_query,
+                retrieval_result,
+                repaired_sql or sql,
+                self._group_ranking_regeneration_error_message(
+                    query_plan,
+                    error_message,
+                ),
+                query_plan,
+            )
+            if regenerated_sql and regenerated_sql.lower().startswith("select"):
+                regeneration_error = self.plan_compliance_error(
+                    user_query,
+                    regenerated_sql,
+                    query_plan,
+                )
+                if not regeneration_error:
+                    return regenerated_sql
 
-        return repaired_sql
+        return ""
 
     def generate_sql(self, user_query: str, retrieval_result: dict) -> str:
         if not self.llm:

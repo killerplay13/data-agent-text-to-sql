@@ -1,70 +1,112 @@
 [
   {
     "question": "Who has the highest deposit?",
-    "ground_truth_sql": "SELECT c.customer_name, d.deposit_amount FROM customers c JOIN deposits d ON c.customer_id = d.customer_id ORDER BY d.deposit_amount DESC LIMIT 1;"
+    "ground_truth_sql": "SELECT c.customer_name, d.deposit_amount FROM customers c JOIN deposits d ON c.customer_id = d.customer_id ORDER BY d.deposit_amount DESC LIMIT 1;",
+    "relevant_schema": ["customers", "deposits"],
+    "relevant_templates": ["highest_deposit_customer"],
+    "relevant_context": ["deposit_amount", "customer_ranking"]
   },
   {
     "question": "Who has the lowest deposit?",
-    "ground_truth_sql": "SELECT c.customer_name, d.deposit_amount FROM customers c JOIN deposits d ON c.customer_id = d.customer_id ORDER BY d.deposit_amount ASC LIMIT 1;"
+    "ground_truth_sql": "SELECT c.customer_name, d.deposit_amount FROM customers c JOIN deposits d ON c.customer_id = d.customer_id ORDER BY d.deposit_amount ASC LIMIT 1;",
+    "relevant_schema": ["customers", "deposits"],
+    "relevant_context": ["deposit_amount", "customer_ranking"]
   },
   {
     "question": "Who are the top 3 customers by deposit amount?",
-    "ground_truth_sql": "SELECT c.customer_name, d.deposit_amount FROM customers c JOIN deposits d ON c.customer_id = d.customer_id ORDER BY d.deposit_amount DESC LIMIT 3;"
+    "ground_truth_sql": "SELECT c.customer_name, d.deposit_amount FROM customers c JOIN deposits d ON c.customer_id = d.customer_id ORDER BY d.deposit_amount DESC LIMIT 3;",
+    "relevant_schema": ["customers", "deposits"],
+    "relevant_context": ["deposit_amount", "customer_ranking"]
   },
   {
     "question": "Who are the top 2 customers in Taipei Branch by deposit amount?",
-    "ground_truth_sql": "SELECT c.customer_name, d.deposit_amount FROM customers c JOIN deposits d ON c.customer_id = d.customer_id JOIN branches b ON c.branch_id = b.branch_id WHERE b.branch_name = 'Taipei Branch' ORDER BY d.deposit_amount DESC LIMIT 2;"
+    "ground_truth_sql": "SELECT c.customer_name, d.deposit_amount FROM customers c JOIN deposits d ON c.customer_id = d.customer_id JOIN branches b ON c.branch_id = b.branch_id WHERE b.branch_name = 'Taipei Branch' ORDER BY d.deposit_amount DESC LIMIT 2;",
+    "relevant_schema": ["customers", "deposits", "branches"],
+    "relevant_templates": ["top_customers_by_branch"],
+    "relevant_context": ["branch", "deposit_amount", "customer_ranking"]
   },
   {
     "question": "What is the total deposit amount in each branch?",
-    "ground_truth_sql": "SELECT b.branch_name, SUM(d.deposit_amount) AS total_deposit FROM branches b JOIN customers c ON b.branch_id = c.branch_id JOIN deposits d ON c.customer_id = d.customer_id GROUP BY b.branch_name ORDER BY total_deposit DESC;"
+    "ground_truth_sql": "SELECT b.branch_name, SUM(d.deposit_amount) AS total_deposit FROM branches b JOIN customers c ON b.branch_id = c.branch_id JOIN deposits d ON c.customer_id = d.customer_id GROUP BY b.branch_name ORDER BY total_deposit DESC;",
+    "relevant_schema": ["branches", "customers", "deposits"],
+    "relevant_templates": ["total_deposit_by_branch"],
+    "relevant_context": ["branch", "deposit_amount"]
   },
   {
     "question": "What is the average deposit amount managed by each relationship manager?",
-    "ground_truth_sql": "SELECT rm.rm_name, AVG(d.deposit_amount) AS avg_deposit FROM relationship_managers rm JOIN customers c ON rm.rm_id = c.rm_id JOIN deposits d ON c.customer_id = d.customer_id GROUP BY rm.rm_name ORDER BY avg_deposit DESC;"
+    "ground_truth_sql": "SELECT rm.rm_name, AVG(d.deposit_amount) AS avg_deposit FROM relationship_managers rm JOIN customers c ON rm.rm_id = c.rm_id JOIN deposits d ON c.customer_id = d.customer_id GROUP BY rm.rm_name ORDER BY avg_deposit DESC;",
+    "relevant_schema": ["relationship_managers", "customers", "deposits"],
+    "relevant_templates": ["average_deposit_per_rm"],
+    "relevant_context": ["relationship_manager", "deposit_amount"]
   },
   {
     "question": "Which RM has the highest average deposit?",
-    "ground_truth_sql": "SELECT rm.rm_name FROM relationship_managers rm JOIN customers c ON rm.rm_id = c.rm_id JOIN deposits d ON c.customer_id = d.customer_id GROUP BY rm.rm_name ORDER BY AVG(d.deposit_amount) DESC LIMIT 1;"
+    "ground_truth_sql": "SELECT rm.rm_name FROM relationship_managers rm JOIN customers c ON rm.rm_id = c.rm_id JOIN deposits d ON c.customer_id = d.customer_id GROUP BY rm.rm_name ORDER BY AVG(d.deposit_amount) DESC LIMIT 1;",
+    "relevant_schema": ["relationship_managers", "customers", "deposits"],
+    "relevant_templates": ["average_deposit_per_rm"],
+    "relevant_context": ["relationship_manager", "deposit_amount"]
   },
   {
     "question": "Which branch has the most customers?",
-    "ground_truth_sql": "SELECT b.branch_name FROM branches b JOIN customers c ON b.branch_id = c.branch_id GROUP BY b.branch_name ORDER BY COUNT(c.customer_id) DESC LIMIT 1;"
+    "ground_truth_sql": "SELECT b.branch_name FROM branches b JOIN customers c ON b.branch_id = c.branch_id GROUP BY b.branch_name ORDER BY COUNT(c.customer_id) DESC LIMIT 1;",
+    "relevant_schema": ["branches", "customers"],
+    "relevant_context": ["branch"]
   },
   {
     "question": "Which branch has the highest total deposit?",
-    "ground_truth_sql": "SELECT b.branch_name FROM branches b JOIN customers c ON b.branch_id = c.branch_id JOIN deposits d ON c.customer_id = d.customer_id GROUP BY b.branch_name ORDER BY SUM(d.deposit_amount) DESC LIMIT 1;"
+    "ground_truth_sql": "SELECT b.branch_name FROM branches b JOIN customers c ON b.branch_id = c.branch_id JOIN deposits d ON c.customer_id = d.customer_id GROUP BY b.branch_name ORDER BY SUM(d.deposit_amount) DESC LIMIT 1;",
+    "relevant_schema": ["branches", "customers", "deposits"],
+    "relevant_templates": ["total_deposit_by_branch"],
+    "relevant_context": ["branch", "deposit_amount"]
   },
   {
     "question": "Which customers are managed by Alice Chen?",
-    "ground_truth_sql": "SELECT c.customer_name FROM customers c JOIN relationship_managers rm ON c.rm_id = rm.rm_id WHERE rm.rm_name = 'Alice Chen' ORDER BY c.customer_name ASC;"
+    "ground_truth_sql": "SELECT c.customer_name FROM customers c JOIN relationship_managers rm ON c.rm_id = rm.rm_id WHERE rm.rm_name = 'Alice Chen' ORDER BY c.customer_name ASC;",
+    "relevant_schema": ["customers", "relationship_managers"],
+    "relevant_templates": ["customers_under_rm"],
+    "relevant_context": ["relationship_manager"]
   },
   {
     "question": "Which customers are in Taipei Branch?",
-    "ground_truth_sql": "SELECT c.customer_name FROM customers c JOIN branches b ON c.branch_id = b.branch_id WHERE b.branch_name = 'Taipei Branch' ORDER BY c.customer_name ASC;"
+    "ground_truth_sql": "SELECT c.customer_name FROM customers c JOIN branches b ON c.branch_id = b.branch_id WHERE b.branch_name = 'Taipei Branch' ORDER BY c.customer_name ASC;",
+    "relevant_schema": ["customers", "branches"],
+    "relevant_context": ["branch"]
   },
   {
     "question": "Which deposits are above 5000000?",
-    "ground_truth_sql": "SELECT c.customer_name, d.deposit_amount FROM customers c JOIN deposits d ON c.customer_id = d.customer_id WHERE d.deposit_amount > 5000000 ORDER BY d.deposit_amount DESC;"
+    "ground_truth_sql": "SELECT c.customer_name, d.deposit_amount FROM customers c JOIN deposits d ON c.customer_id = d.customer_id WHERE d.deposit_amount > 5000000 ORDER BY d.deposit_amount DESC;",
+    "relevant_schema": ["customers", "deposits"],
+    "relevant_context": ["deposit_amount"]
   },
   {
     "question": "How many customers are in each branch?",
-    "ground_truth_sql": "SELECT b.branch_name, COUNT(c.customer_id) AS customer_count FROM branches b JOIN customers c ON b.branch_id = c.branch_id GROUP BY b.branch_name ORDER BY customer_count DESC, b.branch_name ASC;"
+    "ground_truth_sql": "SELECT b.branch_name, COUNT(c.customer_id) AS customer_count FROM branches b JOIN customers c ON b.branch_id = c.branch_id GROUP BY b.branch_name ORDER BY customer_count DESC, b.branch_name ASC;",
+    "relevant_schema": ["branches", "customers"],
+    "relevant_context": ["branch"]
   },
   {
     "question": "What is the total deposit amount in Kaohsiung Branch?",
-    "ground_truth_sql": "SELECT SUM(d.deposit_amount) AS total_deposit FROM branches b JOIN customers c ON b.branch_id = c.branch_id JOIN deposits d ON c.customer_id = d.customer_id WHERE b.branch_name = 'Kaohsiung Branch';"
+    "ground_truth_sql": "SELECT SUM(d.deposit_amount) AS total_deposit FROM branches b JOIN customers c ON b.branch_id = c.branch_id JOIN deposits d ON c.customer_id = d.customer_id WHERE b.branch_name = 'Kaohsiung Branch';",
+    "relevant_schema": ["branches", "customers", "deposits"],
+    "relevant_templates": ["total_deposit_by_branch"],
+    "relevant_context": ["branch", "deposit_amount"]
   },
   {
     "question": "What is the average deposit amount in Taipei Branch?",
-    "ground_truth_sql": "SELECT AVG(d.deposit_amount) AS avg_deposit FROM branches b JOIN customers c ON b.branch_id = c.branch_id JOIN deposits d ON c.customer_id = d.customer_id WHERE b.branch_name = 'Taipei Branch';"
+    "ground_truth_sql": "SELECT AVG(d.deposit_amount) AS avg_deposit FROM branches b JOIN customers c ON b.branch_id = c.branch_id JOIN deposits d ON c.customer_id = d.customer_id WHERE b.branch_name = 'Taipei Branch';",
+    "relevant_schema": ["branches", "customers", "deposits"],
+    "relevant_context": ["branch", "deposit_amount"]
   },
   {
     "question": "Which relationship managers work in Taipei Branch?",
-    "ground_truth_sql": "SELECT rm.rm_name FROM relationship_managers rm JOIN branches b ON rm.branch_id = b.branch_id WHERE b.branch_name = 'Taipei Branch' ORDER BY rm.rm_name ASC;"
+    "ground_truth_sql": "SELECT rm.rm_name FROM relationship_managers rm JOIN branches b ON rm.branch_id = b.branch_id WHERE b.branch_name = 'Taipei Branch' ORDER BY rm.rm_name ASC;",
+    "relevant_schema": ["relationship_managers", "branches"],
+    "relevant_context": ["relationship_manager", "branch"]
   },
   {
     "question": "Which customers in Kaohsiung Branch have deposits above 3000000?",
-    "ground_truth_sql": "SELECT c.customer_name, d.deposit_amount FROM customers c JOIN branches b ON c.branch_id = b.branch_id JOIN deposits d ON c.customer_id = d.customer_id WHERE b.branch_name = 'Kaohsiung Branch' AND d.deposit_amount > 3000000 ORDER BY d.deposit_amount DESC;"
+    "ground_truth_sql": "SELECT c.customer_name, d.deposit_amount FROM customers c JOIN branches b ON c.branch_id = b.branch_id JOIN deposits d ON c.customer_id = d.customer_id WHERE b.branch_name = 'Kaohsiung Branch' AND d.deposit_amount > 3000000 ORDER BY d.deposit_amount DESC;",
+    "relevant_schema": ["customers", "branches", "deposits"],
+    "relevant_context": ["branch", "deposit_amount"]
   }
 ]

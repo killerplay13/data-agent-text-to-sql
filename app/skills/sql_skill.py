@@ -32,6 +32,10 @@ class SQLSkill(BaseSkill):
             input["user_query"],
             input["retrieval_result"],
         )
+        input["generated_sql_source"] = self.service.last_sql_source
+
+        if input["generated_sql_source"] == "fallback":
+            return input
 
         query_plan = self.service.last_query_plan
         compliance_error = self.service.plan_compliance_error(
@@ -58,14 +62,18 @@ class SQLSkill(BaseSkill):
                 and not self._validation_error(repaired_sql, input["retrieval_result"])
             ):
                 input["generated_sql"] = repaired_sql
+                input["generated_sql_source"] = "repair"
             else:
                 fallback_sql = self._fallback_sql(input["retrieval_result"])
                 if fallback_sql:
                     input["generated_sql"] = fallback_sql
+                    input["generated_sql_source"] = "fallback"
+                    return input
                 else:
-                    raise ValueError(
+                    print(
                         "Generated SQL failed plan compliance, repair did not succeed, "
-                        "and no fallback SQL template was retrieved."
+                        "and no fallback SQL template was retrieved. Continuing with "
+                        "the generated SQL so execution can decide whether it is valid."
                     )
 
         validation_error = self._validation_error(
@@ -90,10 +98,13 @@ class SQLSkill(BaseSkill):
                 query_plan,
             ):
                 input["generated_sql"] = repaired_sql
+                input["generated_sql_source"] = "repair"
             else:
                 fallback_sql = self._fallback_sql(input["retrieval_result"])
                 if fallback_sql:
                     input["generated_sql"] = fallback_sql
+                    input["generated_sql_source"] = "fallback"
+                    return input
                 else:
                     raise ValueError(
                         "Generated SQL failed validation, repair did not succeed, "

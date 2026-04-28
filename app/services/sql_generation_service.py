@@ -32,6 +32,11 @@ SQL_SELECT_CLAUSE_PATTERN = re.compile(
     r"\bselect\b(?P<select>.*?)\bfrom\b",
     re.IGNORECASE | re.DOTALL,
 )
+SQL_ORDER_BY_CLAUSE_PATTERN = re.compile(
+    r"\border\s+by\b(?P<order_by>.*?)(?:\blimit\b|;|$)",
+    re.IGNORECASE | re.DOTALL,
+)
+SQL_LIMIT_PATTERN = re.compile(r"\blimit\s+(?P<limit>\d+)\b", re.IGNORECASE)
 QUERIED_BRANCH_NAME_PATTERN = re.compile(r"\b([A-Za-z]+ Branch)\b", re.IGNORECASE)
 
 
@@ -75,6 +80,7 @@ class SQLGenerationService:
     def __init__(self):
         self.llm = None
         self.last_query_plan = {}
+        self.last_sql_source = None
         self._schema_docs = self._load_full_schema_docs()
         self._metric_to_tables = self._build_metric_table_map(self._schema_docs)
 
@@ -95,6 +101,7 @@ class SQLGenerationService:
         sections = [
             self._build_plan_block(query_plan),
             self._build_instruction_block(),
+            self._build_query_type_output_shape_block(query_plan),
             self._build_group_ranking_guidance_block(query_plan),
             self._build_schema_block(retrieval_result),
             self._build_template_block(retrieval_result),
@@ -128,7 +135,7 @@ class SQLGenerationService:
             "14. Apply business rules only when relevant to the query.",
             "15. Only use aggregation, ranking, filtering, ordering, or limits when needed for the user query.",
             "16. If the Query Plan provides select_columns, you MUST include the required SELECT outputs.",
-            "17. Extra SELECT columns are allowed when they do not conflict with the query intent.",
+            "17. Do NOT add extra SELECT columns beyond the required output shape for the query_type.",
             (
                 '18. If the user asks for ranking with words like "highest", "top", '
                 '"maximum", or "largest", identify the correct metric column and use '
@@ -209,8 +216,58 @@ class SQLGenerationService:
                 '39. For row-level deposit questions such as "which deposits are above", '
                 "include customer_name with deposit_amount."
             ),
+            "40. Match the query_type output shape exactly.",
+            "41. ALWAYS include the correct SELECT columns for the query_type.",
+            "42. ALWAYS include the correct aggregation when the query_type requires it.",
+            "43. ALWAYS include the correct ORDER BY when the query is a ranking query.",
         ]
         return "\n".join(instructions)
+
+    def _build_query_type_output_shape_block(
+        self,
+        query_plan: dict | None = None,
+    ) -> str:
+        required_query_type = (query_plan or {}).get("query_type")
+        lines = [
+            "Query Type Output Shapes:",
+            "1. row_ranking:",
+            "   Output shape: SELECT <entity_column>, <ranking_metric> ... ORDER BY <ranking_metric> <ASC|DESC> LIMIT <n>.",
+            "   SELECT the correct entity column plus the correct ranking metric.",
+            "   NO aggregation: do NOT use COUNT(), SUM(), AVG(), GROUP BY, or aggregate aliases.",
+            "   MUST include ORDER BY on the ranking metric and MUST include LIMIT.",
+            "   Example: SELECT c.customer_name, d.deposit_amount FROM customers c JOIN deposits d ON c.customer_id = d.customer_id ORDER BY d.deposit_amount DESC LIMIT 1",
+            "2. group_ranking:",
+            "   Output shape: SELECT <entity_column> ... GROUP BY <entity_column> ORDER BY <AGG(metric)> <ASC|DESC> LIMIT <n>.",
+            "   SELECT only the correct entity column.",
+            "   MUST include the required aggregation, GROUP BY, and ORDER BY on the aggregation.",
+            "   Do NOT return the aggregated metric in SELECT unless the user explicitly asks for it.",
+            "   Example: SELECT b.branch_name FROM branches b JOIN customers c ON b.branch_id = c.branch_id GROUP BY b.branch_name ORDER BY COUNT(c.customer_id) DESC LIMIT 1",
+            "3. group_listing:",
+            "   Output shape: SELECT <entity_column>, <AGG(metric)> AS <metric_alias> ... GROUP BY <entity_column>.",
+            "   SELECT the correct entity column plus the correct aggregated metric.",
+            "   MUST include the required aggregation and GROUP BY.",
+            "   Example: SELECT b.branch_name, COUNT(c.customer_id) AS customer_count FROM branches b JOIN customers c ON b.branch_id = c.branch_id GROUP BY b.branch_name ORDER BY customer_count DESC",
+            "4. scalar:",
+            "   Output shape: SELECT <AGG(metric)> AS <metric_alias> ... .",
+            "   SELECT a single aggregated value only.",
+            "   MUST return exactly one value and MUST NOT use GROUP BY.",
+            "   Example: SELECT AVG(d.deposit_amount) AS avg_deposit FROM branches b JOIN customers c ON b.branch_id = c.branch_id JOIN deposits d ON c.customer_id = d.customer_id WHERE b.branch_name = 'Taipei Branch'",
+            "5. simple_filter:",
+            "   SELECT row-level entity columns only.",
+            "   Do NOT use COUNT(), SUM(), AVG(), or GROUP BY.",
+            "   Example: SELECT c.customer_name FROM customers c JOIN relationship_managers rm ON c.rm_id = rm.rm_id WHERE rm.rm_name = 'Alice Chen' ORDER BY c.customer_name ASC",
+        ]
+
+        if required_query_type:
+            lines.extend(
+                [
+                    "",
+                    f"Required Query Type: {required_query_type}",
+                    "The SQL MUST match that query_type output shape exactly.",
+                ]
+            )
+
+        return "\n".join(lines)
 
     def _build_schema_block(self, retrieval_result: dict) -> str:
         schema_docs = retrieval_result.get("schema_docs", [])
@@ -258,7 +315,7 @@ class SQLGenerationService:
                 "5. query_type controls whether the query is row-level ranking, grouped ranking, grouped listing, scalar aggregation, or simple filtering.",
                 "6. You MUST include all required select_columns in the SELECT clause.",
                 "7. Do NOT omit required select_columns.",
-                "8. Extra SELECT columns are allowed when they do not conflict with the query intent.",
+                "8. Do NOT add extra SELECT columns that do not belong to the required query_type output shape.",
                 "9. metric must appear in the SQL either directly or through the required aggregation.",
                 '10. If aggregation is present, you MUST apply it exactly as defined in the plan.',
                 '11. If group_by is present, you MUST use GROUP BY exactly as required by the plan.',
@@ -548,8 +605,11 @@ class SQLGenerationService:
                     "8. If a Query Plan is provided, the repaired SQL MUST satisfy it exactly.",
                     "9. For group_ranking, regenerate the SQL using the required grouped ranking shape instead of copying the previous SELECT list when it is wrong.",
                     "10. Do not fallback to a template-shaped answer unless the repaired SQL satisfies the Query Plan.",
+                    "11. Match the query_type output shape exactly.",
+                    "12. Allow aliases and formatting to differ if the SQL is logically correct.",
                 ]
             ),
+            self._build_query_type_output_shape_block(query_plan),
             self._build_group_ranking_guidance_block(query_plan, error_message),
             self._build_schema_block(retrieval_result),
             self._build_template_block(retrieval_result),
@@ -668,13 +728,7 @@ class SQLGenerationService:
     ) -> str:
         fallback_sql = self.fallback_sql(retrieval_result)
         if fallback_sql:
-            compliance_error = self.plan_compliance_error(
-                user_query,
-                fallback_sql,
-                query_plan,
-            )
-            if compliance_error:
-                raise ValueError(f"Fallback SQL failed compliance: {compliance_error}")
+            self.last_sql_source = "fallback"
             return fallback_sql
         raise ValueError(reason)
 
@@ -774,6 +828,10 @@ class SQLGenerationService:
         if query_type_error:
             return query_type_error
 
+        ordering_error = self._ordering_compliance_error(sql_lower, query_plan)
+        if ordering_error:
+            return ordering_error
+
         row_ranking_error = self._row_ranking_customer_compliance_error(
             select_clause,
             used_tables,
@@ -867,6 +925,22 @@ class SQLGenerationService:
         if not select_match:
             return ""
         return select_match.group("select")
+
+    def _extract_order_by_clause(self, sql: str) -> str:
+        order_by_match = SQL_ORDER_BY_CLAUSE_PATTERN.search(sql)
+        if not order_by_match:
+            return ""
+        return order_by_match.group("order_by").strip()
+
+    def _extract_limit_value(self, sql: str) -> int | None:
+        limit_match = SQL_LIMIT_PATTERN.search(sql)
+        if not limit_match:
+            return None
+
+        try:
+            return int(limit_match.group("limit"))
+        except ValueError:
+            return None
 
     def _entity_table(self, target_entity: str | None) -> str | None:
         if not target_entity:
@@ -1096,6 +1170,50 @@ class SQLGenerationService:
 
         return None
 
+    def _ordering_compliance_error(
+        self,
+        sql: str,
+        query_plan: dict | None,
+    ) -> str | None:
+        if not query_plan:
+            return None
+
+        query_type = query_plan.get("query_type")
+        aggregation = query_plan.get("aggregation")
+        metric = query_plan.get("metric")
+        expected_limit = query_plan.get("limit")
+        order_by_clause = self._extract_order_by_clause(sql)
+        actual_limit = self._extract_limit_value(sql)
+
+        if query_type == "row_ranking":
+            if not order_by_clause:
+                return (
+                    "SQL plan compliance failed: row_ranking queries must use ORDER BY."
+                )
+            if actual_limit is None:
+                return "SQL plan compliance failed: row_ranking queries must use LIMIT."
+            if expected_limit is not None and actual_limit != expected_limit:
+                return (
+                    "SQL plan compliance failed: row_ranking LIMIT does not match the plan."
+                )
+
+        if query_type == "group_ranking":
+            if not order_by_clause:
+                return (
+                    "SQL plan compliance failed: group_ranking queries must use ORDER BY."
+                )
+            if not self._order_by_uses_aggregation(order_by_clause, aggregation, metric):
+                return (
+                    "SQL plan compliance failed: group_ranking ORDER BY must rank by the "
+                    "required aggregation."
+                )
+            if expected_limit is not None and actual_limit != expected_limit:
+                return (
+                    "SQL plan compliance failed: group_ranking LIMIT does not match the plan."
+                )
+
+        return None
+
     def _row_ranking_customer_compliance_error(
         self,
         select_clause: str,
@@ -1147,17 +1265,18 @@ class SQLGenerationService:
         if not required_outputs:
             return None
 
-        actual_outputs = {
-            output_name
-            for output_name in [
-                self._output_name_for_select_expression(expression)
-                for expression in self._split_select_expressions(select_clause)
-            ]
-            if output_name
-        }
+        select_expressions = self._split_select_expressions(select_clause)
 
         missing_columns = [
-            column for column in required_outputs if column.lower() not in actual_outputs
+            column
+            for column in required_outputs
+            if not self._select_clause_has_required_output(
+                select_expressions,
+                column,
+                metric,
+                query_type,
+                target_entity,
+            )
         ]
         if missing_columns:
             return (
@@ -1166,14 +1285,28 @@ class SQLGenerationService:
             )
 
         if query_type == "group_ranking":
-            expected_outputs = {
-                column.lower()
-                for column in required_outputs
-            }
-            if actual_outputs != expected_outputs:
+            if len(select_expressions) != 1:
                 return (
                     "SQL plan compliance failed: group_ranking SELECT must include "
                     "only the entity column."
+                )
+            entity_column = required_outputs[0]
+            expression = select_expressions[0]
+            if not self._expression_matches_column(expression, entity_column):
+                return (
+                    "SQL plan compliance failed: group_ranking SELECT must include "
+                    "only the entity column."
+                )
+            if self._expression_has_aggregation(expression):
+                return (
+                    "SQL plan compliance failed: group_ranking SELECT must include "
+                    "only the entity column."
+                )
+
+        if query_type == "scalar":
+            if len(select_expressions) != 1:
+                return (
+                    "SQL plan compliance failed: scalar queries must return a single value."
                 )
 
         return None
@@ -1191,10 +1324,17 @@ class SQLGenerationService:
             return [entity_column] if entity_column else []
 
         if query_type == "scalar":
-            return []
+            return select_columns
 
         if query_type == "row_ranking":
-            return [metric] if metric else []
+            if select_columns:
+                return select_columns
+            outputs = []
+            if entity_column:
+                outputs.append(entity_column)
+            if metric:
+                outputs.append(metric)
+            return outputs
 
         return select_columns
 
@@ -1242,6 +1382,82 @@ class SQLGenerationService:
             return ""
 
         return identifier_matches[-1].lower()
+
+    def _expression_has_aggregation(self, expression: str) -> bool:
+        return any(
+            re.search(rf"\b{aggregation_name}\s*\(", expression, re.IGNORECASE)
+            for aggregation_name in SUPPORTED_AGGREGATIONS
+        )
+
+    def _expression_matches_column(self, expression: str, column_name: str) -> bool:
+        return bool(
+            re.search(
+                rf"\b(?:[A-Za-z_][A-Za-z0-9_]*\.)?{re.escape(column_name.lower())}\b",
+                expression.lower(),
+            )
+        )
+
+    def _select_clause_has_required_output(
+        self,
+        select_expressions: list[str],
+        required_output: str,
+        metric: str | None,
+        query_type: str | None,
+        target_entity: str | None,
+    ) -> bool:
+        required_output_lower = required_output.lower()
+        entity_column = (self._required_entity_column(target_entity) or "").lower()
+
+        for expression in select_expressions:
+            output_name = self._output_name_for_select_expression(expression)
+            if output_name == required_output_lower:
+                return True
+            if self._expression_matches_column(expression, required_output_lower):
+                return True
+
+        if query_type in {"group_listing", "scalar"} and metric:
+            if required_output_lower not in {metric.lower(), entity_column}:
+                return any(
+                    self._expression_has_aggregation(expression)
+                    and self._expression_uses_metric(expression, metric)
+                    for expression in select_expressions
+                )
+
+        return False
+
+    def _expression_uses_metric(self, expression: str, metric: str) -> bool:
+        return bool(
+            re.search(
+                rf"\b(?:[A-Za-z_][A-Za-z0-9_]*\.)?{re.escape(metric.lower())}\b",
+                expression.lower(),
+            )
+        )
+
+    def _order_by_uses_aggregation(
+        self,
+        order_by_clause: str,
+        aggregation: str | None,
+        metric: str | None,
+    ) -> bool:
+        if aggregation:
+            aggregation_pattern = re.compile(
+                rf"\b{re.escape(aggregation.lower())}\s*\(",
+                re.IGNORECASE,
+            )
+            if not aggregation_pattern.search(order_by_clause):
+                return False
+
+            if not metric:
+                return True
+
+            return bool(
+                re.search(
+                    rf"\b(?:[A-Za-z_][A-Za-z0-9_]*\.)?{re.escape(metric.lower())}\b",
+                    order_by_clause.lower(),
+                )
+            )
+
+        return self._expression_has_aggregation(order_by_clause)
 
     def _has_required_join_path(
         self,
@@ -1463,6 +1679,7 @@ class SQLGenerationService:
         return ""
 
     def generate_sql(self, user_query: str, retrieval_result: dict) -> str:
+        self.last_sql_source = None
         if not self.llm:
             return self._fallback_or_raise(
                 user_query,
@@ -1488,6 +1705,7 @@ class SQLGenerationService:
                     "Generated SQL was malformed or did not start with SELECT.",
                 )
                 if repaired_sql:
+                    self.last_sql_source = "repair"
                     return repaired_sql
                 return self._fallback_or_raise(
                     user_query,
@@ -1506,14 +1724,15 @@ class SQLGenerationService:
                     compliance_error,
                 )
                 if repaired_sql:
+                    self.last_sql_source = "repair"
                     return repaired_sql
-                return self._fallback_or_raise(
-                    user_query,
-                    retrieval_result,
-                    "SQL generation failed plan compliance and no fallback SQL template was retrieved.",
-                    query_plan,
-                )
+                fallback_sql = self.fallback_sql(retrieval_result)
+                if fallback_sql:
+                    self.last_sql_source = "fallback"
+                    return fallback_sql
+                print("No fallback SQL was available; continuing with generated SQL.")
 
+            self.last_sql_source = "llm"
             return sql
         except Exception as e:
             print(f"LLM generation failed, fallback to template. Reason: {e}")

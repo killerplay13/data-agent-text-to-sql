@@ -39,7 +39,10 @@ class ExecutionSkill(BaseSkill):
             if repaired_sql and self._is_valid_sql(repaired_sql, retrieval_result):
                 input["generated_sql"] = repaired_sql
             else:
-                fallback_sql = self._fallback_sql(retrieval_result)
+                fallback_sql = self._fallback_sql(
+                    retrieval_result,
+                    input["user_query"],
+                )
                 if fallback_sql:
                     input["generated_sql"] = fallback_sql
                     input["generated_sql_source"] = "fallback"
@@ -64,7 +67,10 @@ class ExecutionSkill(BaseSkill):
                 input["generated_sql"] = repaired_sql
                 input["query_result"] = self.service.execute_query(input["generated_sql"])
             else:
-                fallback_sql = self._fallback_sql(retrieval_result)
+                fallback_sql = self._fallback_sql(
+                    retrieval_result,
+                    input["user_query"],
+                )
                 if not fallback_sql:
                     raise ValueError(
                         "SQL execution failed, repair did not succeed, "
@@ -117,5 +123,5 @@ class ExecutionSkill(BaseSkill):
 
         return tables
 
-    def _fallback_sql(self, retrieval_result: dict) -> str:
-        return self.sql_service.fallback_sql(retrieval_result)
+    def _fallback_sql(self, retrieval_result: dict, user_query: str) -> str:
+        return self.sql_service.fallback_sql(retrieval_result, user_query)

@@ -1,5 +1,6 @@
 import argparse
 import json
+import re
 from pathlib import Path
 
 from app.services.execution_service import ExecutionService
@@ -63,6 +64,20 @@ def normalize_result_rows(rows: list[dict] | None) -> list[str]:
         json.dumps(row, sort_keys=True, ensure_ascii=False, default=str)
         for row in rows
     )
+
+
+def normalize_result_rows_ordered(rows: list[dict] | None) -> list[str]:
+    if rows is None:
+        return []
+
+    return [
+        json.dumps(row, sort_keys=True, ensure_ascii=False, default=str)
+        for row in rows
+    ]
+
+
+def has_order_by(sql: str) -> bool:
+    return bool(re.search(r"\border\s+by\b", sql, re.IGNORECASE))
 
 
 def preview_rows(rows: list[dict] | None, max_rows: int = 3):
@@ -217,6 +232,17 @@ def evaluate_case(
         if sql_valid
         else False
     )
+    ordered_result_match = (
+        normalize_result_rows_ordered(generated_result)
+        == normalize_result_rows_ordered(ground_truth_result)
+        if sql_valid
+        else False
+    )
+    strict_result_match = (
+        ordered_result_match
+        if has_order_by(ground_truth_sql) or has_order_by(generated_sql)
+        else result_match
+    )
 
     return {
         "case": index,
@@ -238,6 +264,8 @@ def evaluate_case(
         "sql_valid": sql_valid,
         "exact_match": exact_match,
         "result_match": result_match,
+        "ordered_result_match": ordered_result_match,
+        "strict_result_match": strict_result_match,
         "generated_result_preview": preview_rows(generated_result, preview_limit),
         "ground_truth_result_preview": preview_rows(ground_truth_result, preview_limit),
         "error_message": error_message,
@@ -268,6 +296,8 @@ def print_case_report(case_report: dict):
     print(f"SQL Valid: {case_report['sql_valid']}")
     print(f"Exact SQL Match: {case_report['exact_match']}")
     print(f"Result Match: {case_report['result_match']}")
+    print(f"Ordered Result Match: {case_report['ordered_result_match']}")
+    print(f"Strict Result Match: {case_report['strict_result_match']}")
     print(f"Generated Result Preview: {case_report['generated_result_preview']}")
     print(
         "Ground Truth Result Preview: "
@@ -283,6 +313,12 @@ def build_summary(case_reports: list[dict]) -> dict:
     valid_sql_count = sum(1 for report in case_reports if report["sql_valid"])
     exact_match_count = sum(1 for report in case_reports if report["exact_match"])
     result_match_count = sum(1 for report in case_reports if report["result_match"])
+    ordered_result_match_count = sum(
+        1 for report in case_reports if report["ordered_result_match"]
+    )
+    strict_result_match_count = sum(
+        1 for report in case_reports if report["strict_result_match"]
+    )
 
     retrieval_metrics = {}
     for category_name, category_config in RETRIEVAL_CATEGORY_CONFIG.items():
@@ -311,9 +347,13 @@ def build_summary(case_reports: list[dict]) -> dict:
         "valid_sql_count": valid_sql_count,
         "exact_match_count": exact_match_count,
         "result_match_count": result_match_count,
+        "ordered_result_match_count": ordered_result_match_count,
+        "strict_result_match_count": strict_result_match_count,
         "valid_sql_rate": format_rate(valid_sql_count, total),
         "exact_match_rate": format_rate(exact_match_count, total),
         "result_match_rate": format_rate(result_match_count, total),
+        "ordered_result_match_rate": format_rate(ordered_result_match_count, total),
+        "strict_result_match_rate": format_rate(strict_result_match_count, total),
         "retrieval_metrics": retrieval_metrics,
     }
 
@@ -325,6 +365,8 @@ def print_summary(summary: dict):
     print(f"Valid SQL Rate: {summary['valid_sql_rate']}")
     print(f"Exact SQL Match Rate: {summary['exact_match_rate']}")
     print(f"Result Match Rate: {summary['result_match_rate']}")
+    print(f"Ordered Result Match Rate: {summary['ordered_result_match_rate']}")
+    print(f"Strict Result Match Rate: {summary['strict_result_match_rate']}")
     print("\nRetrieval Metrics:")
     for category_name in ("schema", "template", "context"):
         metrics = summary["retrieval_metrics"][category_name]

@@ -74,6 +74,12 @@ SUPPORTED_QUERY_TYPES = {
     "scalar",
     "simple_filter",
 }
+SEMANTIC_METRIC_NORMALIZATION_MAP = {
+    "average_deposit": ("deposit_amount", "AVG"),
+    "avg_deposit": ("deposit_amount", "AVG"),
+    "total_deposit": ("deposit_amount", "SUM"),
+    "customer_count": ("customer_id", "COUNT"),
+}
 
 
 class SQLGenerationService:
@@ -100,6 +106,7 @@ class SQLGenerationService:
     ) -> str:
         sections = [
             self._build_plan_block(query_plan),
+            self._build_constraint_block(query_plan),
             self._build_instruction_block(),
             self._build_query_type_output_shape_block(query_plan),
             self._build_group_ranking_guidance_block(query_plan),
@@ -265,6 +272,49 @@ class SQLGenerationService:
                     f"Required Query Type: {required_query_type}",
                     "The SQL MUST match that query_type output shape exactly.",
                 ]
+            )
+
+        return "\n".join(lines)
+
+    def _build_constraint_block(self, query_plan: dict | None) -> str:
+        if not query_plan:
+            return ""
+
+        constraint_spec = self._build_constraint_spec(query_plan)
+        forbidden_rules = constraint_spec.get("forbidden_rules") or []
+
+        lines = [
+            "Deterministic Output Constraints:",
+            json.dumps(
+                {
+                    "query_type": constraint_spec.get("query_type"),
+                    "required_select_columns": constraint_spec.get(
+                        "required_select_columns"
+                    ),
+                    "required_aggregation": constraint_spec.get(
+                        "required_aggregation"
+                    ),
+                    "required_group_by": constraint_spec.get("required_group_by"),
+                    "required_order_by": constraint_spec.get("required_order_by"),
+                    "required_limit": constraint_spec.get("required_limit"),
+                    "output_schema": constraint_spec.get("output_schema"),
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            "",
+            "Constraint Rules:",
+            "1. You MUST match the deterministic output constraints exactly.",
+            "2. You MUST NOT deviate from the required SELECT columns, aggregation, GROUP BY, ORDER BY, or LIMIT.",
+            "3. If a template conflicts with these constraints, ignore the conflicting parts of the template.",
+            "4. Output schema means the final SELECT result columns only, not helper expressions used in ORDER BY.",
+        ]
+
+        if forbidden_rules:
+            lines.append("5. Forbidden deviations:")
+            lines.extend(
+                f"   - {rule}"
+                for rule in forbidden_rules
             )
 
         return "\n".join(lines)
@@ -589,6 +639,7 @@ class SQLGenerationService:
     ) -> str:
         sections = [
             self._build_plan_block(query_plan),
+            self._build_constraint_block(query_plan),
             "\n".join(
                 [
                     "You are a senior Text-to-SQL assistant.",
@@ -631,11 +682,142 @@ class SQLGenerationService:
         ]
         return "\n\n".join(section for section in sections if section)
 
-    def fallback_sql(self, retrieval_result: dict) -> str | None:
+    def fallback_sql(self, retrieval_result: dict, user_query: str = "") -> str | None:
         templates = retrieval_result.get("sql_templates", [])
         if templates:
+            selected_template = self._select_fallback_template(templates, user_query)
+            if selected_template:
+                return selected_template["sql"]
             return templates[0]["sql"]
         return None
+
+    def _select_fallback_template(
+        self,
+        templates: list[dict],
+        user_query: str,
+    ) -> dict | None:
+        if not templates:
+            return None
+
+        normalized_query = user_query.strip().lower()
+        if not normalized_query:
+            return templates[0]
+
+        best_template = templates[0]
+        best_score = float("-inf")
+
+        for template in templates:
+            score = self._score_fallback_template(template, normalized_query)
+            if score > best_score:
+                best_score = score
+                best_template = template
+
+        return best_template
+
+    def _score_fallback_template(self, template: dict, normalized_query: str) -> int:
+        sql = str(template.get("sql", "")).lower()
+        text = " ".join(
+            [
+                str(template.get("name", "")),
+                str(template.get("question_example", "")),
+                str(template.get("business_description", "")),
+                sql,
+            ]
+        ).lower()
+        score = 0
+
+        ranking_terms = (
+            "highest",
+            "top",
+            "largest",
+            "maximum",
+            "lowest",
+            "smallest",
+            "minimum",
+            "highest",
+            "top",
+            "most",
+            "least",
+            "最高",
+            "最大",
+            "最低",
+            "最小",
+        )
+        average_terms = ("average", "avg", "mean", "平均")
+        count_terms = ("count", "how many", "number of", "數量", "幾個", "幾位")
+        total_terms = ("total", "sum", "總額", "總和", "合計")
+        branch_terms = ("branch", "branches", "分行")
+        rm_terms = (
+            "relationship manager",
+            "relationship managers",
+            "rm",
+            "經理",
+            "理專",
+        )
+        deposit_terms = ("deposit", "deposits", "deposit amount", "存款", "存款金額")
+        filter_terms = ("above", "over", "below", "under", "greater than", "less than")
+
+        if any(term in normalized_query for term in ranking_terms):
+            if "order by" in sql:
+                score += 3
+            if "limit" in sql:
+                score += 2
+
+        if any(term in normalized_query for term in average_terms):
+            if "avg(" in sql or "average" in text:
+                score += 6
+            else:
+                score -= 2
+
+        if any(term in normalized_query for term in count_terms):
+            if "count(" in sql or "customer_count" in text:
+                score += 6
+            else:
+                score -= 2
+
+        if any(term in normalized_query for term in total_terms):
+            if "sum(" in sql or "total" in text:
+                score += 6
+            else:
+                score -= 2
+
+        if any(term in normalized_query for term in branch_terms):
+            if "branch" in text:
+                score += 3
+            if "where b.branch_name" in sql or "group by b.branch_name" in sql:
+                score += 1
+
+        if any(term in normalized_query for term in rm_terms):
+            if "relationship manager" in text or "rm." in sql or "rm_" in text:
+                score += 4
+            else:
+                score -= 2
+
+        if any(term in normalized_query for term in deposit_terms):
+            if "deposit_amount" in sql or "deposit" in text:
+                score += 4
+            else:
+                score -= 2
+
+        if any(term in normalized_query for term in filter_terms):
+            if "where" in sql:
+                score += 2
+
+        if "customer_name" in sql and "customer" in normalized_query:
+            score += 1
+
+        if "managed by" in normalized_query and "rm_name" in sql:
+            score += 2
+
+        if "each branch" in normalized_query or "per branch" in normalized_query:
+            if "group by" in sql and "branch" in text:
+                score += 3
+
+        if "each relationship manager" in normalized_query or "per relationship manager" in normalized_query:
+            if "group by" in sql and ("relationship manager" in text or "rm_name" in sql):
+                score += 3
+
+        return score
 
     def clean_generated_sql(self, content: str) -> str:
         sql = self._extract_sql(content)
@@ -703,6 +885,52 @@ class SQLGenerationService:
             print(f"LLM SQL repair failed. Reason: {e}")
             return ""
 
+    def _auto_fix_sql_candidate(
+        self,
+        user_query: str,
+        retrieval_result: dict,
+        candidate_sql: str,
+        query_plan: dict | None,
+        source_label: str,
+    ) -> str:
+        cleaned_candidate = self.clean_generated_sql(candidate_sql)
+        if not cleaned_candidate or not cleaned_candidate.lower().startswith("select"):
+            repaired_sql = self._repair_for_compliance(
+                user_query,
+                retrieval_result,
+                candidate_sql,
+                query_plan,
+                (
+                    f"{source_label.capitalize()} SQL was malformed or did not start "
+                    "with SELECT."
+                ),
+            )
+            return repaired_sql or ""
+
+        compliance_error = self.plan_compliance_error(
+            user_query,
+            cleaned_candidate,
+            query_plan,
+        )
+        if not compliance_error:
+            return cleaned_candidate
+
+        print(
+            f"Auto-fixing {source_label} SQL due to constraint violation: "
+            f"{compliance_error}"
+        )
+        repaired_sql = self._repair_for_compliance(
+            user_query,
+            retrieval_result,
+            cleaned_candidate,
+            query_plan,
+            compliance_error,
+        )
+        if repaired_sql:
+            return repaired_sql
+
+        return ""
+
     def plan_query(self, user_query: str, retrieval_result: dict) -> dict:
         if not self.llm:
             return {}
@@ -712,9 +940,13 @@ class SQLGenerationService:
         try:
             response = self.llm.invoke(plan_prompt)
             print(f"Raw LLM query plan response: {response.content}")
-            query_plan = self._parse_query_plan(response.content)
-            print(f"Parsed query plan: {query_plan}")
-            return query_plan
+            parsed_query_plan = self._parse_query_plan(response.content)
+            normalized_query_plan = self._normalize_query_plan(parsed_query_plan)
+            constrained_query_plan = self._apply_query_type_constraints(
+                normalized_query_plan
+            )
+            print(f"Parsed query plan: {constrained_query_plan}")
+            return constrained_query_plan
         except Exception as e:
             print(f"LLM query planning failed. Reason: {e}")
             return {}
@@ -726,8 +958,23 @@ class SQLGenerationService:
         reason: str,
         query_plan: dict | None = None,
     ) -> str:
-        fallback_sql = self.fallback_sql(retrieval_result)
+        fallback_sql = self.fallback_sql(retrieval_result, user_query)
         if fallback_sql:
+            fixed_fallback_sql = self._auto_fix_sql_candidate(
+                user_query,
+                retrieval_result,
+                fallback_sql,
+                query_plan,
+                "fallback",
+            )
+            if fixed_fallback_sql:
+                self.last_sql_source = "fallback_repair"
+                return fixed_fallback_sql
+            if query_plan:
+                raise ValueError(
+                    "Fallback SQL could not be auto-corrected to satisfy the "
+                    "deterministic output constraints."
+                )
             self.last_sql_source = "fallback"
             return fallback_sql
         raise ValueError(reason)
@@ -749,14 +996,14 @@ class SQLGenerationService:
         normalized_plan = {
             "query_type": self._normalize_query_type(parsed.get("query_type")),
             "target_entity": parsed.get("target_entity"),
-            "metric": parsed.get("metric"),
-            "aggregation": parsed.get("aggregation"),
+            "metric": self._normalize_optional_string(parsed.get("metric")),
+            "aggregation": self._normalize_aggregation(parsed.get("aggregation")),
             "select_columns": self._normalize_select_columns(
                 parsed.get("select_columns")
             ),
-            "group_by": parsed.get("group_by"),
-            "order_by": parsed.get("order_by"),
-            "limit": parsed.get("limit"),
+            "group_by": self._normalize_optional_string(parsed.get("group_by")),
+            "order_by": self._normalize_optional_string(parsed.get("order_by")),
+            "limit": self._normalize_limit(parsed.get("limit")),
         }
         return normalized_plan
 
@@ -770,6 +1017,33 @@ class SQLGenerationService:
 
         return None
 
+    def _normalize_optional_string(self, value: object) -> str | None:
+        if not isinstance(value, str):
+            return None
+
+        normalized_value = value.strip()
+        return normalized_value or None
+
+    def _normalize_aggregation(self, aggregation: object) -> str | None:
+        if not isinstance(aggregation, str):
+            return None
+
+        normalized_aggregation = aggregation.strip().upper()
+        if normalized_aggregation in {"COUNT", "SUM", "AVG"}:
+            return normalized_aggregation
+
+        return None
+
+    def _normalize_limit(self, limit: object) -> int | None:
+        if isinstance(limit, int):
+            return limit if limit > 0 else None
+
+        if isinstance(limit, str) and limit.strip().isdigit():
+            normalized_limit = int(limit.strip())
+            return normalized_limit if normalized_limit > 0 else None
+
+        return None
+
     def _normalize_select_columns(self, select_columns: object) -> list[str]:
         if not isinstance(select_columns, list):
             return []
@@ -780,6 +1054,174 @@ class SQLGenerationService:
                 normalized_columns.append(column.strip())
 
         return normalized_columns
+
+    def _normalize_query_plan(self, query_plan: dict) -> dict:
+        if not query_plan:
+            return {}
+
+        normalized_plan = dict(query_plan)
+        metric = normalized_plan.get("metric")
+        aggregation = normalized_plan.get("aggregation")
+
+        if metric:
+            semantic_metric = SEMANTIC_METRIC_NORMALIZATION_MAP.get(metric.lower())
+            if semantic_metric:
+                normalized_plan["metric"] = semantic_metric[0]
+                normalized_plan["aggregation"] = semantic_metric[1]
+            elif not self._is_schema_metric(metric):
+                normalized_plan["metric"] = None
+
+        if normalized_plan.get("metric") and not normalized_plan.get("aggregation"):
+            semantic_metric = SEMANTIC_METRIC_NORMALIZATION_MAP.get(
+                normalized_plan["metric"].lower()
+            )
+            if semantic_metric:
+                normalized_plan["aggregation"] = semantic_metric[1]
+
+        return normalized_plan
+
+    def _is_schema_metric(self, metric: str) -> bool:
+        return metric.lower() in self._metric_to_tables
+
+    def _apply_query_type_constraints(self, query_plan: dict) -> dict:
+        if not query_plan:
+            return {}
+
+        constrained_plan = dict(query_plan)
+        query_type = constrained_plan.get("query_type")
+        target_entity = constrained_plan.get("target_entity")
+        metric = constrained_plan.get("metric")
+        aggregation = constrained_plan.get("aggregation")
+        entity_column = self._required_entity_column(target_entity)
+
+        if query_type == "row_ranking":
+            constrained_plan["aggregation"] = None
+            constrained_plan["group_by"] = None
+            if constrained_plan.get("select_columns"):
+                constrained_plan["select_columns"] = self._unique_preserving_order(
+                    constrained_plan.get("select_columns") or []
+                )
+            else:
+                constrained_plan["select_columns"] = self._unique_preserving_order(
+                    [
+                        column
+                        for column in [entity_column, metric]
+                        if column
+                    ]
+                )
+
+        elif query_type == "group_ranking":
+            constrained_plan["select_columns"] = [entity_column] if entity_column else []
+            constrained_plan["group_by"] = entity_column or constrained_plan.get("group_by")
+            if not constrained_plan.get("order_by") and aggregation and metric:
+                constrained_plan["order_by"] = (
+                    f"{aggregation}({metric}) DESC"
+                )
+
+        elif query_type == "group_listing":
+            aggregate_alias = self._default_aggregate_alias(aggregation, metric)
+            if constrained_plan.get("select_columns"):
+                constrained_plan["select_columns"] = self._unique_preserving_order(
+                    constrained_plan.get("select_columns") or []
+                )
+            else:
+                constrained_select_columns = []
+                if entity_column:
+                    constrained_select_columns.append(entity_column)
+                if aggregate_alias:
+                    constrained_select_columns.append(aggregate_alias)
+                constrained_plan["select_columns"] = self._unique_preserving_order(
+                    constrained_select_columns
+                )
+            constrained_plan["group_by"] = entity_column or constrained_plan.get("group_by")
+
+        elif query_type == "scalar":
+            aggregate_alias = self._default_aggregate_alias(aggregation, metric)
+            if not constrained_plan.get("select_columns") and aggregate_alias:
+                constrained_plan["select_columns"] = [aggregate_alias]
+            constrained_plan["group_by"] = None
+
+        elif query_type == "simple_filter":
+            constrained_plan["aggregation"] = None
+            constrained_plan["group_by"] = None
+            if not constrained_plan.get("select_columns") and entity_column:
+                constrained_plan["select_columns"] = [entity_column]
+
+        return constrained_plan
+
+    def _build_constraint_spec(self, query_plan: dict) -> dict:
+        query_type = query_plan.get("query_type")
+        aggregation = query_plan.get("aggregation")
+        select_columns = query_plan.get("select_columns") or []
+        group_by = query_plan.get("group_by")
+        order_by = query_plan.get("order_by")
+        limit = query_plan.get("limit")
+
+        forbidden_rules = []
+        if query_type == "group_ranking":
+            forbidden_rules.append("Do not include aggregate metrics in SELECT.")
+        if query_type in {"row_ranking", "simple_filter"}:
+            forbidden_rules.append("Do not use COUNT(), SUM(), AVG(), or GROUP BY.")
+        if query_type == "scalar":
+            forbidden_rules.append("Do not return entity columns.")
+        if query_type == "group_listing":
+            forbidden_rules.append("Do not omit the aggregated metric from SELECT.")
+
+        return {
+            "query_type": query_type,
+            "required_select_columns": select_columns,
+            "required_aggregation": aggregation,
+            "required_group_by": group_by,
+            "required_order_by": order_by,
+            "required_limit": limit,
+            "output_schema": select_columns,
+            "forbidden_rules": forbidden_rules,
+        }
+
+    def _unique_preserving_order(self, values: list[str]) -> list[str]:
+        seen: set[str] = set()
+        unique_values: list[str] = []
+        for value in values:
+            normalized_value = value.lower()
+            if normalized_value in seen:
+                continue
+            seen.add(normalized_value)
+            unique_values.append(value)
+        return unique_values
+
+    def _default_aggregate_alias(
+        self,
+        aggregation: str | None,
+        metric: str | None,
+    ) -> str | None:
+        if not aggregation or not metric:
+            return None
+
+        aggregation_prefix_map = {
+            "COUNT": "count",
+            "SUM": "total",
+            "AVG": "avg",
+        }
+        prefix = aggregation_prefix_map.get(aggregation.upper())
+        if not prefix:
+            return None
+
+        if aggregation.upper() == "COUNT":
+            if metric.lower() == "customer_id":
+                return "customer_count"
+            return f"{metric.lower()}_count"
+
+        if aggregation.upper() == "SUM":
+            if metric.lower() == "deposit_amount":
+                return "total_deposit"
+            return f"total_{metric.lower()}"
+
+        if aggregation.upper() == "AVG":
+            if metric.lower() == "deposit_amount":
+                return "avg_deposit"
+            return f"avg_{metric.lower()}"
+
+        return f"{prefix}_{metric.lower()}"
 
     def plan_compliance_error(
         self,
@@ -1676,6 +2118,28 @@ class SQLGenerationService:
                 if not regeneration_error:
                     return regenerated_sql
 
+        constraint_regenerated_sql = self.repair_sql(
+            user_query,
+            retrieval_result,
+            repaired_sql or sql,
+            (
+                f"{error_message} Auto-fix the SQL so it matches the deterministic "
+                "output constraints exactly. Do not preserve incorrect SELECT columns, "
+                "aggregation, GROUP BY, ORDER BY, or LIMIT clauses."
+            ),
+            query_plan,
+        )
+        if constraint_regenerated_sql and constraint_regenerated_sql.lower().startswith(
+            "select"
+        ):
+            constraint_regeneration_error = self.plan_compliance_error(
+                user_query,
+                constraint_regenerated_sql,
+                query_plan,
+            )
+            if not constraint_regeneration_error:
+                return constraint_regenerated_sql
+
         return ""
 
     def generate_sql(self, user_query: str, retrieval_result: dict) -> str:
@@ -1696,44 +2160,23 @@ class SQLGenerationService:
             print(f"Raw LLM SQL response: {response.content}")
             sql = self.clean_generated_sql(response.content)
             print(f"Cleaned SQL: {sql}")
-            if not sql or not sql.lower().startswith("select"):
-                repaired_sql = self._repair_for_compliance(
-                    user_query,
-                    retrieval_result,
-                    sql or response.content,
-                    query_plan,
-                    "Generated SQL was malformed or did not start with SELECT.",
-                )
-                if repaired_sql:
-                    self.last_sql_source = "repair"
-                    return repaired_sql
-                return self._fallback_or_raise(
-                    user_query,
-                    retrieval_result,
-                    "SQL generation failed and no fallback SQL template was retrieved.",
-                    query_plan,
-                )
-            compliance_error = self.plan_compliance_error(user_query, sql, query_plan)
-            if compliance_error:
-                print(compliance_error)
-                repaired_sql = self._repair_for_compliance(
-                    user_query,
-                    retrieval_result,
-                    sql,
-                    query_plan,
-                    compliance_error,
-                )
-                if repaired_sql:
-                    self.last_sql_source = "repair"
-                    return repaired_sql
-                fallback_sql = self.fallback_sql(retrieval_result)
-                if fallback_sql:
-                    self.last_sql_source = "fallback"
-                    return fallback_sql
-                print("No fallback SQL was available; continuing with generated SQL.")
+            fixed_sql = self._auto_fix_sql_candidate(
+                user_query,
+                retrieval_result,
+                sql or response.content,
+                query_plan,
+                "generated",
+            )
+            if fixed_sql:
+                self.last_sql_source = "llm" if fixed_sql == sql else "repair"
+                return fixed_sql
 
-            self.last_sql_source = "llm"
-            return sql
+            return self._fallback_or_raise(
+                user_query,
+                retrieval_result,
+                "SQL generation failed and no fallback SQL template was retrieved.",
+                query_plan,
+            )
         except Exception as e:
             print(f"LLM generation failed, fallback to template. Reason: {e}")
             return self._fallback_or_raise(

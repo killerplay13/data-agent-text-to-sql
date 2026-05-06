@@ -2,20 +2,24 @@
   "summary": {
     "total_cases": 17,
     "valid_sql_count": 16,
-    "exact_match_count": 7,
-    "result_match_count": 10,
+    "exact_match_count": 11,
+    "result_match_count": 15,
+    "ordered_result_match_count": 12,
+    "strict_result_match_count": 12,
     "valid_sql_rate": "16/17 (94.1%)",
-    "exact_match_rate": "7/17 (41.2%)",
-    "result_match_rate": "10/17 (58.8%)",
+    "exact_match_rate": "11/17 (64.7%)",
+    "result_match_rate": "15/17 (88.2%)",
+    "ordered_result_match_rate": "12/17 (70.6%)",
+    "strict_result_match_rate": "12/17 (70.6%)",
     "retrieval_metrics": {
       "schema": {
         "label": "Schema",
         "eligible_cases": 17,
         "hit_count": 17,
         "hit_rate": "17/17 (100.0%)",
-        "recall_numerator": 40,
+        "recall_numerator": 27,
         "recall_denominator": 42,
-        "recall_rate": "40/42 (95.2%)"
+        "recall_rate": "27/42 (64.3%)"
       },
       "template": {
         "label": "Template",
@@ -29,11 +33,11 @@
       "context": {
         "label": "Context",
         "eligible_cases": 17,
-        "hit_count": 17,
-        "hit_rate": "17/17 (100.0%)",
-        "recall_numerator": 27,
+        "hit_count": 16,
+        "hit_rate": "16/17 (94.1%)",
+        "recall_numerator": 20,
         "recall_denominator": 30,
-        "recall_rate": "27/30 (90.0%)"
+        "recall_rate": "20/30 (66.7%)"
       }
     }
   },
@@ -45,19 +49,19 @@
       "retrieved_schema_count": 3,
       "retrieved_business_context_count": 3,
       "retrieved_schema_docs": [
-        "deposits",
         "branches",
+        "relationship_managers",
         "customers"
       ],
       "retrieved_sql_templates": [
         "highest_deposit_customer",
         "top_customers_by_branch",
-        "total_deposit_by_branch"
+        "average_deposit_per_rm"
       ],
       "retrieved_business_context": [
         "deposit_amount",
-        "customer_ranking",
-        "banking_queries"
+        "relationship_manager",
+        "branch"
       ],
       "relevant_schema": [
         "customers",
@@ -77,19 +81,18 @@
             "deposits"
           ],
           "retrieved": [
-            "deposits",
             "branches",
+            "relationship_managers",
             "customers"
           ],
           "evaluated": true,
           "matched_items": [
-            "customers",
-            "deposits"
+            "customers"
           ],
           "hit": true,
-          "recall_numerator": 2,
+          "recall_numerator": 1,
           "recall_denominator": 2,
-          "recall_rate": 1.0
+          "recall_rate": 0.5
         },
         "template": {
           "ground_truth": [
@@ -98,7 +101,7 @@
           "retrieved": [
             "highest_deposit_customer",
             "top_customers_by_branch",
-            "total_deposit_by_branch"
+            "average_deposit_per_rm"
           ],
           "evaluated": true,
           "matched_items": [
@@ -116,25 +119,26 @@
           ],
           "retrieved": [
             "deposit_amount",
-            "customer_ranking",
-            "banking_queries"
+            "relationship_manager",
+            "branch"
           ],
           "evaluated": true,
           "matched_items": [
-            "deposit_amount",
-            "customer_ranking"
+            "deposit_amount"
           ],
           "hit": true,
-          "recall_numerator": 2,
+          "recall_numerator": 1,
           "recall_denominator": 2,
-          "recall_rate": 1.0
+          "recall_rate": 0.5
         }
       },
-      "generated_sql": "SELECT c.customer_name, d.deposit_amount\nFROM customers c\nJOIN deposits d ON c.customer_id = d.customer_id ORDER BY d.deposit_amount DESC\nLIMIT 1;",
+      "generated_sql": "SELECT c.customer_name, d.deposit_amount\nFROM customers c\nJOIN deposits d ON c.customer_id = d.customer_id\nORDER BY d.deposit_amount DESC\nLIMIT 1",
       "ground_truth_sql": "SELECT c.customer_name, d.deposit_amount FROM customers c JOIN deposits d ON c.customer_id = d.customer_id ORDER BY d.deposit_amount DESC LIMIT 1;",
       "sql_valid": true,
       "exact_match": true,
       "result_match": true,
+      "ordered_result_match": true,
+      "strict_result_match": true,
       "generated_result_preview": [
         {
           "customer_name": "劉志強",
@@ -156,19 +160,19 @@
       "retrieved_schema_count": 3,
       "retrieved_business_context_count": 3,
       "retrieved_schema_docs": [
-        "deposits",
         "branches",
+        "relationship_managers",
         "customers"
       ],
       "retrieved_sql_templates": [
         "highest_deposit_customer",
         "top_customers_by_branch",
-        "total_deposit_by_branch"
+        "average_deposit_per_rm"
       ],
       "retrieved_business_context": [
         "deposit_amount",
-        "customer_ranking",
-        "banking_queries"
+        "relationship_manager",
+        "branch"
       ],
       "relevant_schema": [
         "customers",
@@ -186,26 +190,25 @@
             "deposits"
           ],
           "retrieved": [
-            "deposits",
             "branches",
+            "relationship_managers",
             "customers"
           ],
           "evaluated": true,
           "matched_items": [
-            "customers",
-            "deposits"
+            "customers"
           ],
           "hit": true,
-          "recall_numerator": 2,
+          "recall_numerator": 1,
           "recall_denominator": 2,
-          "recall_rate": 1.0
+          "recall_rate": 0.5
         },
         "template": {
           "ground_truth": [],
           "retrieved": [
             "highest_deposit_customer",
             "top_customers_by_branch",
-            "total_deposit_by_branch"
+            "average_deposit_per_rm"
           ],
           "evaluated": false,
           "matched_items": [],
@@ -221,25 +224,26 @@
           ],
           "retrieved": [
             "deposit_amount",
-            "customer_ranking",
-            "banking_queries"
+            "relationship_manager",
+            "branch"
           ],
           "evaluated": true,
           "matched_items": [
-            "deposit_amount",
-            "customer_ranking"
+            "deposit_amount"
           ],
           "hit": true,
-          "recall_numerator": 2,
+          "recall_numerator": 1,
           "recall_denominator": 2,
-          "recall_rate": 1.0
+          "recall_rate": 0.5
         }
       },
-      "generated_sql": "SELECT c.customer_name, d.deposit_amount FROM customers c JOIN deposits d ON c.customer_id = d.customer_id ORDER BY d.deposit_amount ASC LIMIT 1;",
+      "generated_sql": "SELECT c.customer_name, d.deposit_amount\nFROM customers c\nJOIN deposits d ON c.customer_id = d.customer_id\nORDER BY d.deposit_amount ASC\nLIMIT 1",
       "ground_truth_sql": "SELECT c.customer_name, d.deposit_amount FROM customers c JOIN deposits d ON c.customer_id = d.customer_id ORDER BY d.deposit_amount ASC LIMIT 1;",
       "sql_valid": true,
       "exact_match": true,
       "result_match": true,
+      "ordered_result_match": true,
+      "strict_result_match": true,
       "generated_result_preview": [
         {
           "customer_name": "張雅婷",
@@ -263,17 +267,17 @@
       "retrieved_schema_docs": [
         "deposits",
         "branches",
-        "customers"
+        "relationship_managers"
       ],
       "retrieved_sql_templates": [
         "top_customers_by_branch",
-        "highest_deposit_customer",
-        "total_deposit_by_branch"
+        "total_deposit_by_branch",
+        "customers_under_rm"
       ],
       "retrieved_business_context": [
-        "deposit_amount",
-        "customer_ranking",
-        "banking_queries"
+        "branch",
+        "banking_queries",
+        "relationship_manager"
       ],
       "relevant_schema": [
         "customers",
@@ -293,24 +297,23 @@
           "retrieved": [
             "deposits",
             "branches",
-            "customers"
+            "relationship_managers"
           ],
           "evaluated": true,
           "matched_items": [
-            "customers",
             "deposits"
           ],
           "hit": true,
-          "recall_numerator": 2,
+          "recall_numerator": 1,
           "recall_denominator": 2,
-          "recall_rate": 1.0
+          "recall_rate": 0.5
         },
         "template": {
           "ground_truth": [],
           "retrieved": [
             "top_customers_by_branch",
-            "highest_deposit_customer",
-            "total_deposit_by_branch"
+            "total_deposit_by_branch",
+            "customers_under_rm"
           ],
           "evaluated": false,
           "matched_items": [],
@@ -325,26 +328,25 @@
             "customer_ranking"
           ],
           "retrieved": [
-            "deposit_amount",
-            "customer_ranking",
-            "banking_queries"
+            "branch",
+            "banking_queries",
+            "relationship_manager"
           ],
           "evaluated": true,
-          "matched_items": [
-            "deposit_amount",
-            "customer_ranking"
-          ],
-          "hit": true,
-          "recall_numerator": 2,
+          "matched_items": [],
+          "hit": false,
+          "recall_numerator": 0,
           "recall_denominator": 2,
-          "recall_rate": 1.0
+          "recall_rate": 0.0
         }
       },
-      "generated_sql": "SELECT c.customer_name, d.deposit_amount FROM customers c JOIN deposits d ON c.customer_id = d.customer_id ORDER BY d.deposit_amount DESC LIMIT 3",
+      "generated_sql": "SELECT c.customer_name, d.deposit_amount\nFROM customers c\nJOIN deposits d ON c.customer_id = d.customer_id\nORDER BY d.deposit_amount DESC\nLIMIT 3",
       "ground_truth_sql": "SELECT c.customer_name, d.deposit_amount FROM customers c JOIN deposits d ON c.customer_id = d.customer_id ORDER BY d.deposit_amount DESC LIMIT 3;",
       "sql_valid": true,
       "exact_match": true,
       "result_match": true,
+      "ordered_result_match": true,
+      "strict_result_match": true,
       "generated_result_preview": [
         {
           "customer_name": "劉志強",
@@ -383,18 +385,18 @@
       "retrieved_business_context_count": 3,
       "retrieved_schema_docs": [
         "branches",
-        "customers",
-        "deposits"
+        "deposits",
+        "relationship_managers"
       ],
       "retrieved_sql_templates": [
         "top_customers_by_branch",
         "total_deposit_by_branch",
-        "highest_deposit_customer"
+        "customers_under_rm"
       ],
       "retrieved_business_context": [
-        "customer_ranking",
-        "deposit_amount",
-        "banking_queries"
+        "branch",
+        "banking_queries",
+        "relationship_manager"
       ],
       "relevant_schema": [
         "customers",
@@ -418,19 +420,18 @@
           ],
           "retrieved": [
             "branches",
-            "customers",
-            "deposits"
+            "deposits",
+            "relationship_managers"
           ],
           "evaluated": true,
           "matched_items": [
-            "customers",
             "deposits",
             "branches"
           ],
           "hit": true,
-          "recall_numerator": 3,
+          "recall_numerator": 2,
           "recall_denominator": 3,
-          "recall_rate": 1.0
+          "recall_rate": 0.6666666666666666
         },
         "template": {
           "ground_truth": [
@@ -439,7 +440,7 @@
           "retrieved": [
             "top_customers_by_branch",
             "total_deposit_by_branch",
-            "highest_deposit_customer"
+            "customers_under_rm"
           ],
           "evaluated": true,
           "matched_items": [
@@ -457,26 +458,27 @@
             "customer_ranking"
           ],
           "retrieved": [
-            "customer_ranking",
-            "deposit_amount",
-            "banking_queries"
+            "branch",
+            "banking_queries",
+            "relationship_manager"
           ],
           "evaluated": true,
           "matched_items": [
-            "deposit_amount",
-            "customer_ranking"
+            "branch"
           ],
           "hit": true,
-          "recall_numerator": 2,
+          "recall_numerator": 1,
           "recall_denominator": 3,
-          "recall_rate": 0.6666666666666666
+          "recall_rate": 0.3333333333333333
         }
       },
-      "generated_sql": "SELECT c.customer_name, d.deposit_amount FROM customers c JOIN deposits d ON c.customer_id = d.customer_id JOIN branches b ON c.branch_id = b.branch_id WHERE b.branch_name = 'Taipei Branch' ORDER BY d.deposit_amount DESC LIMIT 2",
+      "generated_sql": "SELECT c.customer_name, d.deposit_amount\nFROM customers c\nJOIN deposits d ON c.customer_id = d.customer_id\nJOIN branches b ON c.branch_id = b.branch_id\nWHERE b.branch_name = 'Taipei Branch'\nORDER BY d.deposit_amount DESC\nLIMIT 2",
       "ground_truth_sql": "SELECT c.customer_name, d.deposit_amount FROM customers c JOIN deposits d ON c.customer_id = d.customer_id JOIN branches b ON c.branch_id = b.branch_id WHERE b.branch_name = 'Taipei Branch' ORDER BY d.deposit_amount DESC LIMIT 2;",
       "sql_valid": true,
       "exact_match": true,
       "result_match": true,
+      "ordered_result_match": true,
+      "strict_result_match": true,
       "generated_result_preview": [
         {
           "customer_name": "王小明",
@@ -506,19 +508,19 @@
       "retrieved_schema_count": 3,
       "retrieved_business_context_count": 3,
       "retrieved_schema_docs": [
-        "branches",
         "deposits",
-        "customers"
+        "branches",
+        "relationship_managers"
       ],
       "retrieved_sql_templates": [
         "total_deposit_by_branch",
-        "top_customers_by_branch",
-        "average_deposit_per_rm"
+        "average_deposit_per_rm",
+        "highest_deposit_customer"
       ],
       "retrieved_business_context": [
         "deposit_amount",
-        "banking_queries",
-        "branch"
+        "customer_ranking",
+        "banking_queries"
       ],
       "relevant_schema": [
         "branches",
@@ -540,20 +542,19 @@
             "deposits"
           ],
           "retrieved": [
-            "branches",
             "deposits",
-            "customers"
+            "branches",
+            "relationship_managers"
           ],
           "evaluated": true,
           "matched_items": [
             "branches",
-            "customers",
             "deposits"
           ],
           "hit": true,
-          "recall_numerator": 3,
+          "recall_numerator": 2,
           "recall_denominator": 3,
-          "recall_rate": 1.0
+          "recall_rate": 0.6666666666666666
         },
         "template": {
           "ground_truth": [
@@ -561,8 +562,8 @@
           ],
           "retrieved": [
             "total_deposit_by_branch",
-            "top_customers_by_branch",
-            "average_deposit_per_rm"
+            "average_deposit_per_rm",
+            "highest_deposit_customer"
           ],
           "evaluated": true,
           "matched_items": [
@@ -580,26 +581,31 @@
           ],
           "retrieved": [
             "deposit_amount",
-            "banking_queries",
-            "branch"
+            "customer_ranking",
+            "banking_queries"
           ],
           "evaluated": true,
           "matched_items": [
-            "branch",
             "deposit_amount"
           ],
           "hit": true,
-          "recall_numerator": 2,
+          "recall_numerator": 1,
           "recall_denominator": 2,
-          "recall_rate": 1.0
+          "recall_rate": 0.5
         }
       },
-      "generated_sql": "SELECT b.branch_name, SUM(d.deposit_amount) AS total_deposit\nFROM branches b\nJOIN customers c ON b.branch_id = c.branch_id\nJOIN deposits d ON c.customer_id = d.customer_id\nGROUP BY b.branch_name",
+      "generated_sql": "SELECT b.branch_name, SUM(d.deposit_amount) AS total_deposit\nFROM branches b\nJOIN customers c ON b.branch_id = c.branch_id\nJOIN deposits d ON c.customer_id = d.customer_id\nGROUP BY b.branch_name\nORDER BY total_deposit DESC",
       "ground_truth_sql": "SELECT b.branch_name, SUM(d.deposit_amount) AS total_deposit FROM branches b JOIN customers c ON b.branch_id = c.branch_id JOIN deposits d ON c.customer_id = d.customer_id GROUP BY b.branch_name ORDER BY total_deposit DESC;",
       "sql_valid": true,
-      "exact_match": false,
+      "exact_match": true,
       "result_match": true,
+      "ordered_result_match": true,
+      "strict_result_match": true,
       "generated_result_preview": [
+        {
+          "branch_name": "Taipei Branch",
+          "total_deposit": 22300000.0
+        },
         {
           "branch_name": "Kaohsiung Branch",
           "total_deposit": 15900000.0
@@ -607,10 +613,6 @@
         {
           "branch_name": "Taichung Branch",
           "total_deposit": 8500000.0
-        },
-        {
-          "branch_name": "Taipei Branch",
-          "total_deposit": 22300000.0
         }
       ],
       "ground_truth_result_preview": [
@@ -636,19 +638,19 @@
       "retrieved_schema_count": 3,
       "retrieved_business_context_count": 3,
       "retrieved_schema_docs": [
-        "relationship_managers",
         "deposits",
-        "branches"
+        "branches",
+        "relationship_managers"
       ],
       "retrieved_sql_templates": [
         "average_deposit_per_rm",
         "total_deposit_by_branch",
-        "highest_deposit_customer"
+        "customers_under_rm"
       ],
       "retrieved_business_context": [
         "deposit_amount",
-        "relationship_manager",
-        "banking_queries"
+        "banking_queries",
+        "relationship_manager"
       ],
       "relevant_schema": [
         "relationship_managers",
@@ -670,9 +672,9 @@
             "deposits"
           ],
           "retrieved": [
-            "relationship_managers",
             "deposits",
-            "branches"
+            "branches",
+            "relationship_managers"
           ],
           "evaluated": true,
           "matched_items": [
@@ -691,7 +693,7 @@
           "retrieved": [
             "average_deposit_per_rm",
             "total_deposit_by_branch",
-            "highest_deposit_customer"
+            "customers_under_rm"
           ],
           "evaluated": true,
           "matched_items": [
@@ -709,8 +711,8 @@
           ],
           "retrieved": [
             "deposit_amount",
-            "relationship_manager",
-            "banking_queries"
+            "banking_queries",
+            "relationship_manager"
           ],
           "evaluated": true,
           "matched_items": [
@@ -723,14 +725,25 @@
           "recall_rate": 1.0
         }
       },
-      "generated_sql": "SELECT AVG(d.deposit_amount) AS average_deposit FROM relationship_managers rm JOIN customers c ON rm.rm_id = c.rm_id JOIN deposits d ON c.customer_id = d.customer_id",
+      "generated_sql": "SELECT rm.rm_name, AVG(d.deposit_amount) AS avg_deposit\nFROM relationship_managers rm\nJOIN customers c ON rm.rm_id = c.rm_id\nJOIN deposits d ON c.customer_id = d.customer_id\nGROUP BY rm.rm_name\nORDER BY avg_deposit DESC",
       "ground_truth_sql": "SELECT rm.rm_name, AVG(d.deposit_amount) AS avg_deposit FROM relationship_managers rm JOIN customers c ON rm.rm_id = c.rm_id JOIN deposits d ON c.customer_id = d.customer_id GROUP BY rm.rm_name ORDER BY avg_deposit DESC;",
       "sql_valid": true,
-      "exact_match": false,
-      "result_match": false,
+      "exact_match": true,
+      "result_match": true,
+      "ordered_result_match": true,
+      "strict_result_match": true,
       "generated_result_preview": [
         {
-          "average_deposit": 4670000.0
+          "rm_name": "David Liu",
+          "avg_deposit": 6950000.0
+        },
+        {
+          "rm_name": "Brian Lin",
+          "avg_deposit": 5900000.0
+        },
+        {
+          "rm_name": "Alice Chen",
+          "avg_deposit": 5250000.0
         }
       ],
       "ground_truth_result_preview": [
@@ -752,23 +765,23 @@
     {
       "case": 7,
       "question": "Which RM has the highest average deposit?",
-      "retrieved_sql_template": "average_deposit_per_rm",
+      "retrieved_sql_template": "highest_deposit_customer",
       "retrieved_schema_count": 3,
       "retrieved_business_context_count": 3,
       "retrieved_schema_docs": [
-        "deposits",
         "branches",
-        "relationship_managers"
+        "relationship_managers",
+        "customers"
       ],
       "retrieved_sql_templates": [
-        "average_deposit_per_rm",
         "highest_deposit_customer",
-        "top_customers_by_branch"
+        "average_deposit_per_rm",
+        "customers_under_rm"
       ],
       "retrieved_business_context": [
         "deposit_amount",
-        "customer_ranking",
-        "relationship_manager"
+        "relationship_manager",
+        "banking_queries"
       ],
       "relevant_schema": [
         "relationship_managers",
@@ -790,14 +803,14 @@
             "deposits"
           ],
           "retrieved": [
-            "deposits",
             "branches",
-            "relationship_managers"
+            "relationship_managers",
+            "customers"
           ],
           "evaluated": true,
           "matched_items": [
             "relationship_managers",
-            "deposits"
+            "customers"
           ],
           "hit": true,
           "recall_numerator": 2,
@@ -809,9 +822,9 @@
             "average_deposit_per_rm"
           ],
           "retrieved": [
-            "average_deposit_per_rm",
             "highest_deposit_customer",
-            "top_customers_by_branch"
+            "average_deposit_per_rm",
+            "customers_under_rm"
           ],
           "evaluated": true,
           "matched_items": [
@@ -829,8 +842,8 @@
           ],
           "retrieved": [
             "deposit_amount",
-            "customer_ranking",
-            "relationship_manager"
+            "relationship_manager",
+            "banking_queries"
           ],
           "evaluated": true,
           "matched_items": [
@@ -843,23 +856,16 @@
           "recall_rate": 1.0
         }
       },
-      "generated_sql": "SELECT rm.rm_name, AVG(d.deposit_amount) AS avg_deposit FROM relationship_managers rm JOIN customers c ON rm.rm_id = c.rm_id JOIN deposits d ON c.customer_id = d.customer_id GROUP BY rm.rm_name ORDER BY avg_deposit DESC;",
+      "generated_sql": "SELECT rm.rm_name\nFROM relationship_managers rm\nJOIN customers c ON rm.rm_id = c.rm_id\nJOIN deposits d ON c.customer_id = d.customer_id\nGROUP BY rm.rm_name\nORDER BY AVG(d.deposit_amount) DESC\nLIMIT 1",
       "ground_truth_sql": "SELECT rm.rm_name FROM relationship_managers rm JOIN customers c ON rm.rm_id = c.rm_id JOIN deposits d ON c.customer_id = d.customer_id GROUP BY rm.rm_name ORDER BY AVG(d.deposit_amount) DESC LIMIT 1;",
       "sql_valid": true,
-      "exact_match": false,
-      "result_match": false,
+      "exact_match": true,
+      "result_match": true,
+      "ordered_result_match": true,
+      "strict_result_match": true,
       "generated_result_preview": [
         {
-          "rm_name": "David Liu",
-          "avg_deposit": 6950000.0
-        },
-        {
-          "rm_name": "Brian Lin",
-          "avg_deposit": 5900000.0
-        },
-        {
-          "rm_name": "Alice Chen",
-          "avg_deposit": 5250000.0
+          "rm_name": "David Liu"
         }
       ],
       "ground_truth_result_preview": [
@@ -877,13 +883,13 @@
       "retrieved_business_context_count": 3,
       "retrieved_schema_docs": [
         "branches",
-        "customers",
-        "deposits"
+        "relationship_managers",
+        "customers"
       ],
       "retrieved_sql_templates": [
         "top_customers_by_branch",
-        "customers_under_rm",
-        "total_deposit_by_branch"
+        "total_deposit_by_branch",
+        "customers_under_rm"
       ],
       "retrieved_business_context": [
         "branch",
@@ -906,8 +912,8 @@
           ],
           "retrieved": [
             "branches",
-            "customers",
-            "deposits"
+            "relationship_managers",
+            "customers"
           ],
           "evaluated": true,
           "matched_items": [
@@ -923,8 +929,8 @@
           "ground_truth": [],
           "retrieved": [
             "top_customers_by_branch",
-            "customers_under_rm",
-            "total_deposit_by_branch"
+            "total_deposit_by_branch",
+            "customers_under_rm"
           ],
           "evaluated": false,
           "matched_items": [],
@@ -952,23 +958,16 @@
           "recall_rate": 1.0
         }
       },
-      "generated_sql": "SELECT c.customer_name, d.deposit_amount FROM customers c JOIN deposits d ON c.customer_id = d.customer_id JOIN branches b ON c.branch_id = b.branch_id WHERE b.branch_name = 'Taipei Branch' ORDER BY d.deposit_amount DESC LIMIT 10;",
+      "generated_sql": "SELECT b.branch_name\nFROM branches b\nJOIN customers c ON b.branch_id = c.branch_id\nGROUP BY b.branch_name\nORDER BY COUNT(c.customer_id) DESC\nLIMIT 1",
       "ground_truth_sql": "SELECT b.branch_name FROM branches b JOIN customers c ON b.branch_id = c.branch_id GROUP BY b.branch_name ORDER BY COUNT(c.customer_id) DESC LIMIT 1;",
       "sql_valid": true,
-      "exact_match": false,
-      "result_match": false,
+      "exact_match": true,
+      "result_match": true,
+      "ordered_result_match": true,
+      "strict_result_match": true,
       "generated_result_preview": [
         {
-          "customer_name": "王小明",
-          "deposit_amount": 8000000.0
-        },
-        {
-          "customer_name": "陳美玲",
-          "deposit_amount": 6200000.0
-        },
-        {
-          "customer_name": "鄭怡君",
-          "deposit_amount": 5600000.0
+          "branch_name": "Taipei Branch"
         }
       ],
       "ground_truth_result_preview": [
@@ -981,23 +980,23 @@
     {
       "case": 9,
       "question": "Which branch has the highest total deposit?",
-      "retrieved_sql_template": "total_deposit_by_branch",
+      "retrieved_sql_template": "highest_deposit_customer",
       "retrieved_schema_count": 3,
       "retrieved_business_context_count": 3,
       "retrieved_schema_docs": [
         "branches",
-        "deposits",
+        "relationship_managers",
         "customers"
       ],
       "retrieved_sql_templates": [
+        "highest_deposit_customer",
         "total_deposit_by_branch",
-        "top_customers_by_branch",
-        "highest_deposit_customer"
+        "top_customers_by_branch"
       ],
       "retrieved_business_context": [
-        "branch",
         "deposit_amount",
-        "banking_queries"
+        "banking_queries",
+        "branch"
       ],
       "relevant_schema": [
         "branches",
@@ -1020,28 +1019,27 @@
           ],
           "retrieved": [
             "branches",
-            "deposits",
+            "relationship_managers",
             "customers"
           ],
           "evaluated": true,
           "matched_items": [
             "branches",
-            "customers",
-            "deposits"
+            "customers"
           ],
           "hit": true,
-          "recall_numerator": 3,
+          "recall_numerator": 2,
           "recall_denominator": 3,
-          "recall_rate": 1.0
+          "recall_rate": 0.6666666666666666
         },
         "template": {
           "ground_truth": [
             "total_deposit_by_branch"
           ],
           "retrieved": [
+            "highest_deposit_customer",
             "total_deposit_by_branch",
-            "top_customers_by_branch",
-            "highest_deposit_customer"
+            "top_customers_by_branch"
           ],
           "evaluated": true,
           "matched_items": [
@@ -1058,9 +1056,9 @@
             "deposit_amount"
           ],
           "retrieved": [
-            "branch",
             "deposit_amount",
-            "banking_queries"
+            "banking_queries",
+            "branch"
           ],
           "evaluated": true,
           "matched_items": [
@@ -1073,23 +1071,16 @@
           "recall_rate": 1.0
         }
       },
-      "generated_sql": "SELECT b.branch_name, SUM(d.deposit_amount) AS total_deposit FROM branches b JOIN customers c ON b.branch_id = c.branch_id JOIN deposits d ON c.customer_id = d.customer_id GROUP BY b.branch_name ORDER BY total_deposit DESC;",
+      "generated_sql": "SELECT b.branch_name\nFROM branches b\nJOIN customers c ON b.branch_id = c.branch_id\nJOIN deposits d ON c.customer_id = d.customer_id\nGROUP BY b.branch_name\nORDER BY SUM(d.deposit_amount) DESC\nLIMIT 1",
       "ground_truth_sql": "SELECT b.branch_name FROM branches b JOIN customers c ON b.branch_id = c.branch_id JOIN deposits d ON c.customer_id = d.customer_id GROUP BY b.branch_name ORDER BY SUM(d.deposit_amount) DESC LIMIT 1;",
       "sql_valid": true,
-      "exact_match": false,
-      "result_match": false,
+      "exact_match": true,
+      "result_match": true,
+      "ordered_result_match": true,
+      "strict_result_match": true,
       "generated_result_preview": [
         {
-          "branch_name": "Taipei Branch",
-          "total_deposit": 22300000.0
-        },
-        {
-          "branch_name": "Kaohsiung Branch",
-          "total_deposit": 15900000.0
-        },
-        {
-          "branch_name": "Taichung Branch",
-          "total_deposit": 8500000.0
+          "branch_name": "Taipei Branch"
         }
       ],
       "ground_truth_result_preview": [
@@ -1107,17 +1098,17 @@
       "retrieved_business_context_count": 3,
       "retrieved_schema_docs": [
         "deposits",
-        "customers",
+        "branches",
         "relationship_managers"
       ],
       "retrieved_sql_templates": [
         "customers_under_rm",
         "top_customers_by_branch",
-        "highest_deposit_customer"
+        "average_deposit_per_rm"
       ],
       "retrieved_business_context": [
-        "relationship_manager",
         "branch",
+        "relationship_manager",
         "banking_queries"
       ],
       "relevant_schema": [
@@ -1138,18 +1129,17 @@
           ],
           "retrieved": [
             "deposits",
-            "customers",
+            "branches",
             "relationship_managers"
           ],
           "evaluated": true,
           "matched_items": [
-            "customers",
             "relationship_managers"
           ],
           "hit": true,
-          "recall_numerator": 2,
+          "recall_numerator": 1,
           "recall_denominator": 2,
-          "recall_rate": 1.0
+          "recall_rate": 0.5
         },
         "template": {
           "ground_truth": [
@@ -1158,7 +1148,7 @@
           "retrieved": [
             "customers_under_rm",
             "top_customers_by_branch",
-            "highest_deposit_customer"
+            "average_deposit_per_rm"
           ],
           "evaluated": true,
           "matched_items": [
@@ -1174,8 +1164,8 @@
             "relationship_manager"
           ],
           "retrieved": [
-            "relationship_manager",
             "branch",
+            "relationship_manager",
             "banking_queries"
           ],
           "evaluated": true,
@@ -1188,17 +1178,19 @@
           "recall_rate": 1.0
         }
       },
-      "generated_sql": "SELECT c.customer_name FROM customers c JOIN relationship_managers rm ON c.rm_id = rm.rm_id WHERE rm.rm_name = 'Alice Chen' ORDER BY c.customer_name ASC;",
+      "generated_sql": "SELECT c.customer_name\nFROM customers c\nJOIN relationship_managers rm ON c.rm_id = rm.rm_id\nWHERE rm.rm_name = 'Alice Chen'",
       "ground_truth_sql": "SELECT c.customer_name FROM customers c JOIN relationship_managers rm ON c.rm_id = rm.rm_id WHERE rm.rm_name = 'Alice Chen' ORDER BY c.customer_name ASC;",
       "sql_valid": true,
-      "exact_match": true,
+      "exact_match": false,
       "result_match": true,
+      "ordered_result_match": false,
+      "strict_result_match": false,
       "generated_result_preview": [
         {
-          "customer_name": "李小華"
+          "customer_name": "王小明"
         },
         {
-          "customer_name": "王小明"
+          "customer_name": "李小華"
         }
       ],
       "ground_truth_result_preview": [
@@ -1218,9 +1210,9 @@
       "retrieved_schema_count": 3,
       "retrieved_business_context_count": 3,
       "retrieved_schema_docs": [
+        "deposits",
         "branches",
-        "customers",
-        "deposits"
+        "relationship_managers"
       ],
       "retrieved_sql_templates": [
         "top_customers_by_branch",
@@ -1229,8 +1221,8 @@
       ],
       "retrieved_business_context": [
         "branch",
-        "banking_queries",
-        "customer_ranking"
+        "relationship_manager",
+        "deposit_amount"
       ],
       "relevant_schema": [
         "customers",
@@ -1247,19 +1239,18 @@
             "branches"
           ],
           "retrieved": [
+            "deposits",
             "branches",
-            "customers",
-            "deposits"
+            "relationship_managers"
           ],
           "evaluated": true,
           "matched_items": [
-            "customers",
             "branches"
           ],
           "hit": true,
-          "recall_numerator": 2,
+          "recall_numerator": 1,
           "recall_denominator": 2,
-          "recall_rate": 1.0
+          "recall_rate": 0.5
         },
         "template": {
           "ground_truth": [],
@@ -1281,8 +1272,8 @@
           ],
           "retrieved": [
             "branch",
-            "banking_queries",
-            "customer_ranking"
+            "relationship_manager",
+            "deposit_amount"
           ],
           "evaluated": true,
           "matched_items": [
@@ -1294,12 +1285,24 @@
           "recall_rate": 1.0
         }
       },
-      "generated_sql": "SELECT c.customer_name FROM customers c JOIN branches b ON c.branch_id = b.branch_id WHERE b.branch_name = 'Taipei Branch' ORDER BY c.deposit_amount DESC LIMIT 10;",
+      "generated_sql": "SELECT c.customer_name\nFROM customers c\nJOIN branches b ON c.branch_id = b.branch_id\nWHERE b.branch_name = 'Taipei Branch';",
       "ground_truth_sql": "SELECT c.customer_name FROM customers c JOIN branches b ON c.branch_id = b.branch_id WHERE b.branch_name = 'Taipei Branch' ORDER BY c.customer_name ASC;",
-      "sql_valid": false,
+      "sql_valid": true,
       "exact_match": false,
-      "result_match": false,
-      "generated_result_preview": [],
+      "result_match": true,
+      "ordered_result_match": false,
+      "strict_result_match": false,
+      "generated_result_preview": [
+        {
+          "customer_name": "王小明"
+        },
+        {
+          "customer_name": "李小華"
+        },
+        {
+          "customer_name": "陳美玲"
+        }
+      ],
       "ground_truth_result_preview": [
         {
           "customer_name": "李小華"
@@ -1311,28 +1314,28 @@
           "customer_name": "鄭怡君"
         }
       ],
-      "error_message": "no such column: c.deposit_amount"
+      "error_message": null
     },
     {
       "case": 12,
       "question": "Which deposits are above 5000000?",
-      "retrieved_sql_template": "highest_deposit_customer",
+      "retrieved_sql_template": "customers_under_rm",
       "retrieved_schema_count": 3,
       "retrieved_business_context_count": 3,
       "retrieved_schema_docs": [
-        "deposits",
         "branches",
+        "relationship_managers",
         "customers"
       ],
       "retrieved_sql_templates": [
-        "highest_deposit_customer",
         "customers_under_rm",
-        "top_customers_by_branch"
+        "top_customers_by_branch",
+        "total_deposit_by_branch"
       ],
       "retrieved_business_context": [
-        "deposit_amount",
         "branch",
-        "banking_queries"
+        "relationship_manager",
+        "deposit_amount"
       ],
       "relevant_schema": [
         "customers",
@@ -1349,26 +1352,25 @@
             "deposits"
           ],
           "retrieved": [
-            "deposits",
             "branches",
+            "relationship_managers",
             "customers"
           ],
           "evaluated": true,
           "matched_items": [
-            "customers",
-            "deposits"
+            "customers"
           ],
           "hit": true,
-          "recall_numerator": 2,
+          "recall_numerator": 1,
           "recall_denominator": 2,
-          "recall_rate": 1.0
+          "recall_rate": 0.5
         },
         "template": {
           "ground_truth": [],
           "retrieved": [
-            "highest_deposit_customer",
             "customers_under_rm",
-            "top_customers_by_branch"
+            "top_customers_by_branch",
+            "total_deposit_by_branch"
           ],
           "evaluated": false,
           "matched_items": [],
@@ -1382,9 +1384,9 @@
             "deposit_amount"
           ],
           "retrieved": [
-            "deposit_amount",
             "branch",
-            "banking_queries"
+            "relationship_manager",
+            "deposit_amount"
           ],
           "evaluated": true,
           "matched_items": [
@@ -1396,15 +1398,25 @@
           "recall_rate": 1.0
         }
       },
-      "generated_sql": "SELECT c.customer_name, d.deposit_amount FROM customers c JOIN deposits d ON c.customer_id = d.customer_id ORDER BY d.deposit_amount DESC LIMIT 1;",
+      "generated_sql": "SELECT c.customer_name, d.deposit_amount FROM customers c JOIN deposits d ON c.customer_id = d.customer_id JOIN branches b ON c.branch_id = b.branch_id WHERE b.branch_name = 'Taipei Branch' ORDER BY d.deposit_amount DESC LIMIT 10;",
       "ground_truth_sql": "SELECT c.customer_name, d.deposit_amount FROM customers c JOIN deposits d ON c.customer_id = d.customer_id WHERE d.deposit_amount > 5000000 ORDER BY d.deposit_amount DESC;",
       "sql_valid": true,
       "exact_match": false,
       "result_match": false,
+      "ordered_result_match": false,
+      "strict_result_match": false,
       "generated_result_preview": [
         {
-          "customer_name": "劉志強",
-          "deposit_amount": 9200000.0
+          "customer_name": "王小明",
+          "deposit_amount": 8000000.0
+        },
+        {
+          "customer_name": "陳美玲",
+          "deposit_amount": 6200000.0
+        },
+        {
+          "customer_name": "鄭怡君",
+          "deposit_amount": 5600000.0
         }
       ],
       "ground_truth_result_preview": [
@@ -1426,23 +1438,23 @@
     {
       "case": 13,
       "question": "How many customers are in each branch?",
-      "retrieved_sql_template": "top_customers_by_branch",
+      "retrieved_sql_template": "total_deposit_by_branch",
       "retrieved_schema_count": 3,
       "retrieved_business_context_count": 3,
       "retrieved_schema_docs": [
+        "deposits",
         "branches",
-        "customers",
-        "deposits"
+        "relationship_managers"
       ],
       "retrieved_sql_templates": [
-        "top_customers_by_branch",
         "total_deposit_by_branch",
-        "highest_deposit_customer"
+        "top_customers_by_branch",
+        "customers_under_rm"
       ],
       "retrieved_business_context": [
         "branch",
-        "banking_queries",
-        "customer_ranking"
+        "relationship_manager",
+        "deposit_amount"
       ],
       "relevant_schema": [
         "branches",
@@ -1459,26 +1471,25 @@
             "customers"
           ],
           "retrieved": [
+            "deposits",
             "branches",
-            "customers",
-            "deposits"
+            "relationship_managers"
           ],
           "evaluated": true,
           "matched_items": [
-            "branches",
-            "customers"
+            "branches"
           ],
           "hit": true,
-          "recall_numerator": 2,
+          "recall_numerator": 1,
           "recall_denominator": 2,
-          "recall_rate": 1.0
+          "recall_rate": 0.5
         },
         "template": {
           "ground_truth": [],
           "retrieved": [
-            "top_customers_by_branch",
             "total_deposit_by_branch",
-            "highest_deposit_customer"
+            "top_customers_by_branch",
+            "customers_under_rm"
           ],
           "evaluated": false,
           "matched_items": [],
@@ -1493,8 +1504,8 @@
           ],
           "retrieved": [
             "branch",
-            "banking_queries",
-            "customer_ranking"
+            "relationship_manager",
+            "deposit_amount"
           ],
           "evaluated": true,
           "matched_items": [
@@ -1506,11 +1517,13 @@
           "recall_rate": 1.0
         }
       },
-      "generated_sql": "SELECT b.branch_name, COUNT(c.customer_id) AS customer_count FROM branches b JOIN customers c ON b.branch_id = c.branch_id GROUP BY b.branch_name;",
+      "generated_sql": "SELECT b.branch_name, COUNT(c.customer_id) AS customer_count\nFROM branches b\nJOIN customers c ON b.branch_id = c.branch_id\nGROUP BY b.branch_name",
       "ground_truth_sql": "SELECT b.branch_name, COUNT(c.customer_id) AS customer_count FROM branches b JOIN customers c ON b.branch_id = c.branch_id GROUP BY b.branch_name ORDER BY customer_count DESC, b.branch_name ASC;",
       "sql_valid": true,
       "exact_match": false,
       "result_match": true,
+      "ordered_result_match": false,
+      "strict_result_match": false,
       "generated_result_preview": [
         {
           "branch_name": "Kaohsiung Branch",
@@ -1550,17 +1563,17 @@
       "retrieved_schema_docs": [
         "deposits",
         "branches",
-        "customers"
+        "relationship_managers"
       ],
       "retrieved_sql_templates": [
         "total_deposit_by_branch",
-        "top_customers_by_branch",
+        "highest_deposit_customer",
         "average_deposit_per_rm"
       ],
       "retrieved_business_context": [
         "deposit_amount",
-        "banking_queries",
-        "branch"
+        "customer_ranking",
+        "banking_queries"
       ],
       "relevant_schema": [
         "branches",
@@ -1584,18 +1597,17 @@
           "retrieved": [
             "deposits",
             "branches",
-            "customers"
+            "relationship_managers"
           ],
           "evaluated": true,
           "matched_items": [
             "branches",
-            "customers",
             "deposits"
           ],
           "hit": true,
-          "recall_numerator": 3,
+          "recall_numerator": 2,
           "recall_denominator": 3,
-          "recall_rate": 1.0
+          "recall_rate": 0.6666666666666666
         },
         "template": {
           "ground_truth": [
@@ -1603,7 +1615,7 @@
           ],
           "retrieved": [
             "total_deposit_by_branch",
-            "top_customers_by_branch",
+            "highest_deposit_customer",
             "average_deposit_per_rm"
           ],
           "evaluated": true,
@@ -1622,57 +1634,54 @@
           ],
           "retrieved": [
             "deposit_amount",
-            "banking_queries",
-            "branch"
+            "customer_ranking",
+            "banking_queries"
           ],
           "evaluated": true,
           "matched_items": [
-            "branch",
             "deposit_amount"
           ],
           "hit": true,
-          "recall_numerator": 2,
+          "recall_numerator": 1,
           "recall_denominator": 2,
-          "recall_rate": 1.0
+          "recall_rate": 0.5
         }
       },
-      "generated_sql": "SELECT SUM(d.deposit_amount) AS total_deposit FROM branches b JOIN customers c ON b.branch_id = c.branch_id JOIN deposits d ON c.customer_id = d.customer_id WHERE b.branch_name = 'Kaohsiung Branch'",
+      "generated_sql": "",
       "ground_truth_sql": "SELECT SUM(d.deposit_amount) AS total_deposit FROM branches b JOIN customers c ON b.branch_id = c.branch_id JOIN deposits d ON c.customer_id = d.customer_id WHERE b.branch_name = 'Kaohsiung Branch';",
-      "sql_valid": true,
-      "exact_match": true,
-      "result_match": true,
-      "generated_result_preview": [
-        {
-          "total_deposit": 15900000.0
-        }
-      ],
+      "sql_valid": false,
+      "exact_match": false,
+      "result_match": false,
+      "ordered_result_match": false,
+      "strict_result_match": false,
+      "generated_result_preview": [],
       "ground_truth_result_preview": [
         {
           "total_deposit": 15900000.0
         }
       ],
-      "error_message": null
+      "error_message": "Fallback SQL could not be auto-corrected to satisfy the deterministic output constraints."
     },
     {
       "case": 15,
       "question": "What is the average deposit amount in Taipei Branch?",
-      "retrieved_sql_template": "top_customers_by_branch",
+      "retrieved_sql_template": "total_deposit_by_branch",
       "retrieved_schema_count": 3,
       "retrieved_business_context_count": 3,
       "retrieved_schema_docs": [
         "deposits",
         "branches",
-        "customers"
+        "relationship_managers"
       ],
       "retrieved_sql_templates": [
-        "top_customers_by_branch",
         "total_deposit_by_branch",
-        "average_deposit_per_rm"
+        "average_deposit_per_rm",
+        "highest_deposit_customer"
       ],
       "retrieved_business_context": [
         "deposit_amount",
-        "banking_queries",
-        "customer_ranking"
+        "customer_ranking",
+        "banking_queries"
       ],
       "relevant_schema": [
         "branches",
@@ -1694,25 +1703,24 @@
           "retrieved": [
             "deposits",
             "branches",
-            "customers"
+            "relationship_managers"
           ],
           "evaluated": true,
           "matched_items": [
             "branches",
-            "customers",
             "deposits"
           ],
           "hit": true,
-          "recall_numerator": 3,
+          "recall_numerator": 2,
           "recall_denominator": 3,
-          "recall_rate": 1.0
+          "recall_rate": 0.6666666666666666
         },
         "template": {
           "ground_truth": [],
           "retrieved": [
-            "top_customers_by_branch",
             "total_deposit_by_branch",
-            "average_deposit_per_rm"
+            "average_deposit_per_rm",
+            "highest_deposit_customer"
           ],
           "evaluated": false,
           "matched_items": [],
@@ -1728,8 +1736,8 @@
           ],
           "retrieved": [
             "deposit_amount",
-            "banking_queries",
-            "customer_ranking"
+            "customer_ranking",
+            "banking_queries"
           ],
           "evaluated": true,
           "matched_items": [
@@ -1741,11 +1749,13 @@
           "recall_rate": 0.5
         }
       },
-      "generated_sql": "SELECT AVG(d.deposit_amount) AS avg_deposit FROM branches b JOIN customers c ON b.branch_id = c.branch_id JOIN deposits d ON c.customer_id = d.customer_id WHERE b.branch_name = 'Taipei Branch';",
+      "generated_sql": "SELECT AVG(d.deposit_amount) AS avg_deposit\nFROM branches b\nJOIN customers c ON b.branch_id = c.branch_id\nJOIN deposits d ON c.customer_id = d.customer_id\nWHERE b.branch_name = 'Taipei Branch';",
       "ground_truth_sql": "SELECT AVG(d.deposit_amount) AS avg_deposit FROM branches b JOIN customers c ON b.branch_id = c.branch_id JOIN deposits d ON c.customer_id = d.customer_id WHERE b.branch_name = 'Taipei Branch';",
       "sql_valid": true,
       "exact_match": true,
       "result_match": true,
+      "ordered_result_match": true,
+      "strict_result_match": true,
       "generated_result_preview": [
         {
           "avg_deposit": 5575000.0
@@ -1761,7 +1771,7 @@
     {
       "case": 16,
       "question": "Which relationship managers work in Taipei Branch?",
-      "retrieved_sql_template": "top_customers_by_branch",
+      "retrieved_sql_template": "customers_under_rm",
       "retrieved_schema_count": 3,
       "retrieved_business_context_count": 3,
       "retrieved_schema_docs": [
@@ -1770,14 +1780,14 @@
         "customers"
       ],
       "retrieved_sql_templates": [
-        "top_customers_by_branch",
         "customers_under_rm",
+        "top_customers_by_branch",
         "total_deposit_by_branch"
       ],
       "retrieved_business_context": [
         "branch",
         "relationship_manager",
-        "banking_queries"
+        "customer_ranking"
       ],
       "relevant_schema": [
         "relationship_managers",
@@ -1812,8 +1822,8 @@
         "template": {
           "ground_truth": [],
           "retrieved": [
-            "top_customers_by_branch",
             "customers_under_rm",
+            "top_customers_by_branch",
             "total_deposit_by_branch"
           ],
           "evaluated": false,
@@ -1831,7 +1841,7 @@
           "retrieved": [
             "branch",
             "relationship_manager",
-            "banking_queries"
+            "customer_ranking"
           ],
           "evaluated": true,
           "matched_items": [
@@ -1844,11 +1854,13 @@
           "recall_rate": 1.0
         }
       },
-      "generated_sql": "SELECT rm.rm_name\nFROM relationship_managers rm\nJOIN branches b ON rm.branch_id = b.branch_id\nWHERE b.branch_name = 'Taipei Branch'",
+      "generated_sql": "SELECT rm.rm_name\nFROM relationship_managers rm\nJOIN branches b ON rm.branch_id = b.branch_id\nWHERE b.branch_name = 'Taipei Branch'\nORDER BY rm.rm_name ASC",
       "ground_truth_sql": "SELECT rm.rm_name FROM relationship_managers rm JOIN branches b ON rm.branch_id = b.branch_id WHERE b.branch_name = 'Taipei Branch' ORDER BY rm.rm_name ASC;",
       "sql_valid": true,
-      "exact_match": false,
+      "exact_match": true,
       "result_match": true,
+      "ordered_result_match": true,
+      "strict_result_match": true,
       "generated_result_preview": [
         {
           "rm_name": "Alice Chen"
@@ -1875,8 +1887,8 @@
       "retrieved_business_context_count": 3,
       "retrieved_schema_docs": [
         "branches",
-        "customers",
-        "deposits"
+        "relationship_managers",
+        "customers"
       ],
       "retrieved_sql_templates": [
         "total_deposit_by_branch",
@@ -1886,7 +1898,7 @@
       "retrieved_business_context": [
         "branch",
         "banking_queries",
-        "customer_ranking"
+        "relationship_manager"
       ],
       "relevant_schema": [
         "customers",
@@ -1907,19 +1919,18 @@
           ],
           "retrieved": [
             "branches",
-            "customers",
-            "deposits"
+            "relationship_managers",
+            "customers"
           ],
           "evaluated": true,
           "matched_items": [
             "customers",
-            "branches",
-            "deposits"
+            "branches"
           ],
           "hit": true,
-          "recall_numerator": 3,
+          "recall_numerator": 2,
           "recall_denominator": 3,
-          "recall_rate": 1.0
+          "recall_rate": 0.6666666666666666
         },
         "template": {
           "ground_truth": [],
@@ -1943,7 +1954,7 @@
           "retrieved": [
             "branch",
             "banking_queries",
-            "customer_ranking"
+            "relationship_manager"
           ],
           "evaluated": true,
           "matched_items": [
@@ -1955,17 +1966,21 @@
           "recall_rate": 0.5
         }
       },
-      "generated_sql": "SELECT c.customer_name\nFROM customers c\nJOIN branches b ON c.branch_id = b.branch_id\nJOIN deposits d ON c.customer_id = d.customer_id\nWHERE b.branch_name = 'Kaohsiung Branch'\n  AND d.deposit_amount > 3000000;",
+      "generated_sql": "SELECT c.customer_name, d.deposit_amount\nFROM customers c\nJOIN deposits d ON c.customer_id = d.customer_id\nJOIN branches b ON c.branch_id = b.branch_id\nWHERE b.branch_name = 'Kaohsiung Branch'\n  AND d.deposit_amount > 3000000;",
       "ground_truth_sql": "SELECT c.customer_name, d.deposit_amount FROM customers c JOIN branches b ON c.branch_id = b.branch_id JOIN deposits d ON c.customer_id = d.customer_id WHERE b.branch_name = 'Kaohsiung Branch' AND d.deposit_amount > 3000000 ORDER BY d.deposit_amount DESC;",
       "sql_valid": true,
       "exact_match": false,
-      "result_match": false,
+      "result_match": true,
+      "ordered_result_match": true,
+      "strict_result_match": true,
       "generated_result_preview": [
         {
-          "customer_name": "劉志強"
+          "customer_name": "劉志強",
+          "deposit_amount": 9200000.0
         },
         {
-          "customer_name": "蔡佩珊"
+          "customer_name": "蔡佩珊",
+          "deposit_amount": 4700000.0
         }
       ],
       "ground_truth_result_preview": [

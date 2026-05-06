@@ -64,7 +64,10 @@ class SQLSkill(BaseSkill):
                 input["generated_sql"] = repaired_sql
                 input["generated_sql_source"] = "repair"
             else:
-                fallback_sql = self._fallback_sql(input["retrieval_result"])
+                fallback_sql = self._fallback_sql(
+                    input["retrieval_result"],
+                    input["user_query"],
+                )
                 if fallback_sql:
                     input["generated_sql"] = fallback_sql
                     input["generated_sql_source"] = "fallback"
@@ -100,7 +103,10 @@ class SQLSkill(BaseSkill):
                 input["generated_sql"] = repaired_sql
                 input["generated_sql_source"] = "repair"
             else:
-                fallback_sql = self._fallback_sql(input["retrieval_result"])
+                fallback_sql = self._fallback_sql(
+                    input["retrieval_result"],
+                    input["user_query"],
+                )
                 if fallback_sql:
                     input["generated_sql"] = fallback_sql
                     input["generated_sql_source"] = "fallback"
@@ -175,5 +181,5 @@ class SQLSkill(BaseSkill):
     def _strip_quoted_text(self, sql: str) -> str:
         return QUOTED_TEXT_PATTERN.sub("", sql)
 
-    def _fallback_sql(self, retrieval_result: dict) -> str | None:
-        return self.service.fallback_sql(retrieval_result)
+    def _fallback_sql(self, retrieval_result: dict, user_query: str) -> str | None:
+        return self.service.fallback_sql(retrieval_result, user_query)

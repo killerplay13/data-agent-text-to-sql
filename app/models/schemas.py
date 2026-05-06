@@ -1,5 +1,6 @@
-from pydantic import AliasChoices, BaseModel, Field
 from typing import Any
+
+from pydantic import AliasChoices, BaseModel, Field
 
 
 class QueryRequest(BaseModel):
@@ -12,4 +13,4 @@ class QueryRequest(BaseModel):
 class QueryResponse(BaseModel):
     answer: str
     generated_sql: str
-    query_result: list[dict[str, Any]]
+    query_result: list[dict[str, Any]] | None = None

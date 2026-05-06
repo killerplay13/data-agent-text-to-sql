@@ -2,12 +2,12 @@
   "summary": {
     "total_cases": 17,
     "valid_sql_count": 16,
-    "exact_match_count": 11,
+    "exact_match_count": 10,
     "result_match_count": 15,
     "ordered_result_match_count": 12,
     "strict_result_match_count": 12,
     "valid_sql_rate": "16/17 (94.1%)",
-    "exact_match_rate": "11/17 (64.7%)",
+    "exact_match_rate": "10/17 (58.8%)",
     "result_match_rate": "15/17 (88.2%)",
     "ordered_result_match_rate": "12/17 (70.6%)",
     "strict_result_match_rate": "12/17 (70.6%)",
@@ -594,7 +594,7 @@
           "recall_rate": 0.5
         }
       },
-      "generated_sql": "SELECT b.branch_name, SUM(d.deposit_amount) AS total_deposit\nFROM branches b\nJOIN customers c ON b.branch_id = c.branch_id\nJOIN deposits d ON c.customer_id = d.customer_id\nGROUP BY b.branch_name\nORDER BY total_deposit DESC",
+      "generated_sql": "SELECT b.branch_name, SUM(d.deposit_amount) AS total_deposit FROM branches b JOIN customers c ON b.branch_id = c.branch_id JOIN deposits d ON c.customer_id = d.customer_id GROUP BY b.branch_name ORDER BY total_deposit DESC;",
       "ground_truth_sql": "SELECT b.branch_name, SUM(d.deposit_amount) AS total_deposit FROM branches b JOIN customers c ON b.branch_id = c.branch_id JOIN deposits d ON c.customer_id = d.customer_id GROUP BY b.branch_name ORDER BY total_deposit DESC;",
       "sql_valid": true,
       "exact_match": true,
@@ -725,7 +725,7 @@
           "recall_rate": 1.0
         }
       },
-      "generated_sql": "SELECT rm.rm_name, AVG(d.deposit_amount) AS avg_deposit\nFROM relationship_managers rm\nJOIN customers c ON rm.rm_id = c.rm_id\nJOIN deposits d ON c.customer_id = d.customer_id\nGROUP BY rm.rm_name\nORDER BY avg_deposit DESC",
+      "generated_sql": "SELECT rm.rm_name, AVG(d.deposit_amount) AS avg_deposit\nFROM relationship_managers rm\nJOIN customers c ON rm.rm_id = c.rm_id\nJOIN deposits d ON c.customer_id = d.customer_id\nGROUP BY rm.rm_name\nORDER BY avg_deposit DESC;",
       "ground_truth_sql": "SELECT rm.rm_name, AVG(d.deposit_amount) AS avg_deposit FROM relationship_managers rm JOIN customers c ON rm.rm_id = c.rm_id JOIN deposits d ON c.customer_id = d.customer_id GROUP BY rm.rm_name ORDER BY avg_deposit DESC;",
       "sql_valid": true,
       "exact_match": true,
@@ -1854,10 +1854,10 @@
           "recall_rate": 1.0
         }
       },
-      "generated_sql": "SELECT rm.rm_name\nFROM relationship_managers rm\nJOIN branches b ON rm.branch_id = b.branch_id\nWHERE b.branch_name = 'Taipei Branch'\nORDER BY rm.rm_name ASC",
+      "generated_sql": "SELECT rm.rm_name\nFROM relationship_managers rm\nJOIN branches b ON rm.branch_id = b.branch_id\nWHERE b.branch_name = 'Taipei Branch';",
       "ground_truth_sql": "SELECT rm.rm_name FROM relationship_managers rm JOIN branches b ON rm.branch_id = b.branch_id WHERE b.branch_name = 'Taipei Branch' ORDER BY rm.rm_name ASC;",
       "sql_valid": true,
-      "exact_match": true,
+      "exact_match": false,
       "result_match": true,
       "ordered_result_match": true,
       "strict_result_match": true,

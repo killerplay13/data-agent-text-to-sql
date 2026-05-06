@@ -23,6 +23,11 @@ class ExecutionSkill(BaseSkill):
 
     def execute(self, input: dict) -> dict:
         retrieval_result = input.get("retrieval_result", {})
+
+        if input.get("generated_sql_source") == "fallback":
+            input["query_result"] = self.service.execute_query(input["generated_sql"])
+            return input
+
         validation_error = self._validation_error(input["generated_sql"], retrieval_result)
         if validation_error:
             repaired_sql = self.sql_service.repair_sql(
@@ -34,9 +39,15 @@ class ExecutionSkill(BaseSkill):
             if repaired_sql and self._is_valid_sql(repaired_sql, retrieval_result):
                 input["generated_sql"] = repaired_sql
             else:
-                fallback_sql = self._fallback_sql(retrieval_result)
+                fallback_sql = self._fallback_sql(
+                    retrieval_result,
+                    input["user_query"],
+                )
                 if fallback_sql:
                     input["generated_sql"] = fallback_sql
+                    input["generated_sql_source"] = "fallback"
+                    input["query_result"] = self.service.execute_query(input["generated_sql"])
+                    return input
                 else:
                     raise ValueError(
                         "Generated SQL failed execution-layer validation, repair did not "
@@ -56,13 +67,17 @@ class ExecutionSkill(BaseSkill):
                 input["generated_sql"] = repaired_sql
                 input["query_result"] = self.service.execute_query(input["generated_sql"])
             else:
-                fallback_sql = self._fallback_sql(retrieval_result)
+                fallback_sql = self._fallback_sql(
+                    retrieval_result,
+                    input["user_query"],
+                )
                 if not fallback_sql:
                     raise ValueError(
                         "SQL execution failed, repair did not succeed, "
                         "and no fallback SQL template was retrieved."
                     ) from e
                 input["generated_sql"] = fallback_sql
+                input["generated_sql_source"] = "fallback"
                 input["query_result"] = self.service.execute_query(input["generated_sql"])
         return input
 
@@ -108,5 +123,5 @@ class ExecutionSkill(BaseSkill):
 
         return tables
 
-    def _fallback_sql(self, retrieval_result: dict) -> str:
-        return self.sql_service.fallback_sql(retrieval_result)
+    def _fallback_sql(self, retrieval_result: dict, user_query: str) -> str:
+        return self.sql_service.fallback_sql(retrieval_result, user_query)
